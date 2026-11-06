@@ -66,7 +66,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
 
-__version__ = "6"  # this webapp's own version, independent of lego_orders_scraper.py's
+__version__ = "7"  # this webapp's own version, independent of lego_orders_scraper.py's
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRAPER_PATH = SCRIPT_DIR / "lego_orders_scraper.py"
@@ -90,7 +90,7 @@ QUIT_HOOK = None  # the launcher installs a function here so /quit can shut the 
 # this run's output" links know where to look even when the user left the
 # output-path fields blank (in which case build_argv() omits the flag
 # entirely and the scraper falls back to these same defaults itself).
-_DEFAULT_OUTPUT_PATHS = {"output": "lego_orders.json", "csv": "lego_order_items.csv"}
+_DEFAULT_OUTPUT_PATHS = {"output": "lego_orders.json", "csv": "lego_order_items.csv", "html": "lego_orders.html"}
 
 # Pre-filled in the form's "Since date" box. Must match DEFAULT_SINCE_DATE in
 # lego_orders_scraper.py (test_since_date_default.py checks they agree).
@@ -155,7 +155,14 @@ def build_argv(config):
         else:
             argv.extend(["--since-date", since_date])
 
-    _opt_str("html", "--html")
+    # HTML report: key absent -> flag omitted (the scraper writes its default
+    # lego_orders.html). Key present but blank -> the user cleared the box on
+    # purpose: no report.
+    html_path = config.get("html")
+    if html_path is not None and not str(html_path).strip():
+        argv.append("--no-html")
+    else:
+        _opt_str("html", "--html")
 
     return argv
 
@@ -342,7 +349,10 @@ class ScrapeJob:
             return {}
         files = {}
         for kind, config_key in (("json", "output"), ("csv", "csv"), ("html", "html")):
-            raw_path = self.config.get(config_key) or _DEFAULT_OUTPUT_PATHS.get(config_key)
+            value = self.config.get(config_key)
+            if config_key == "html" and value is not None and not str(value).strip():
+                continue  # HTML report box cleared -> no report this run, don't offer an old one
+            raw_path = value or _DEFAULT_OUTPUT_PATHS.get(config_key)
             if not raw_path:
                 continue
             path = Path(raw_path)
@@ -609,8 +619,8 @@ INDEX_HTML = r"""<!doctype html>
       </div>
       <div class="field">
         <label for="html">HTML report path</label>
-        <input type="text" id="html" placeholder="e.g. lego_orders.html">
-        <div class="hint">Leave blank to skip the HTML report.</div>
+        <input type="text" id="html" value="lego_orders.html">
+        <div class="hint">Clear it to skip the HTML report.</div>
       </div>
       <div class="field">
         <label for="cookie_source">Cookie source (optional)</label>

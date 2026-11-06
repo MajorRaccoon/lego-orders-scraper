@@ -19,11 +19,18 @@ print("Empty config -> no flags (scraper falls back to its own defaults): OK")
 # input) must be treated as "not provided", not crash or emit "--flag ''".
 blank = {
     "max_orders": "", "delay": "", "load_more_delay": "", "load_more_final_wait": "",
-    "output": "", "csv": "", "html": "", "cookie_source": "",
+    "output": "", "csv": "", "cookie_source": "",
     "headless": False, "fresh": False,
 }
 assert build_argv(blank) == []
 print("Blank-string fields are treated as absent, not crashed on or emitted empty: OK")
+
+# html is special like since_date: key ABSENT -> scraper default (writes
+# lego_orders.html); key present but BLANK -> user cleared the box -> --no-html.
+assert build_argv({"html": ""}) == ["--no-html"]
+assert build_argv({"html": "  "}) == ["--no-html"]
+assert build_argv({"html": "lego_orders.html"}) == ["--html", "lego_orders.html"]
+print("HTML box: cleared -> --no-html; filled -> --html PATH; absent -> scraper default: OK")
 
 # since_date is special: key ABSENT -> scraper's own default applies (flag
 # omitted); key present but BLANK -> user cleared the box -> no cutoff.

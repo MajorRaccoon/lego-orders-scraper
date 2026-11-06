@@ -64,15 +64,16 @@ USAGE
                                                        # on or after that date (format MM/DD/YYYY)
                                                        # (DEFAULT is 02/01/2024 if not given)
     python lego_orders_scraper.py --since-date all   # no cutoff: every order in your history
-    python lego_orders_scraper.py --html lego_orders.html
-                                                       # also write a self-contained HTML report
-                                                       # of this run's orders and all their items
+    python lego_orders_scraper.py --html report.html  # HTML report to a different file
+                                                       # (default: lego_orders.html)
+    python lego_orders_scraper.py --no-html           # skip the HTML report
 
 HTML REPORT
 -----------
-Pass --html PATH to also write a single self-contained HTML file (no
-external CSS/JS -- just open it in a browser) listing every order and its
-full line-item detail, built from this same run's results. To build that
+Every run also writes a single self-contained HTML file (no external
+CSS/JS -- just open it in a browser) listing every order and its full
+line-item detail, built from this same run's results: lego_orders.html by
+default, --html PATH for another file, --no-html to skip it. To build that
 same report later from an existing --output JSON file WITHOUT fetching
 anything from LEGO.com again, use the separate script instead:
     python lego_orders_to_html.py                     # reads lego_orders.json, writes lego_orders.html
@@ -145,11 +146,15 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "31"  # bump by 1 with every change to this script
+__version__ = "32"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
 DEFAULT_SINCE_DATE = "02/01/2024"
+
+# The HTML report is written by default, to this file (--html PATH to change it,
+# --no-html to skip it).
+DEFAULT_HTML_PATH = "lego_orders.html"
 
 BASE = "https://www.lego.com"
 ORDERS_URL = f"{BASE}/en-us/member/orders"
@@ -2001,13 +2006,17 @@ def main():
         "without re-checking your whole history.",
     )
     parser.add_argument(
-        "--html", default=None, metavar="PATH",
-        help="Also write a self-contained HTML report (every order and its "
-        "full line-item detail, viewable by just opening it in a browser) "
-        "to this path, built from this same run's results. Not written by "
-        "default. To build an HTML report from an EXISTING --output file "
-        "without fetching anything, use the separate lego_orders_to_html.py "
-        "script instead.",
+        "--html", default=DEFAULT_HTML_PATH, metavar="PATH",
+        help="Where to write the self-contained HTML report (every order and "
+        "its full line-item detail, viewable by just opening it in a "
+        f"browser), built from this same run's results. Default: "
+        f"{DEFAULT_HTML_PATH}. Use --no-html to skip it. To build an HTML "
+        "report from an EXISTING --output file without fetching anything, "
+        "use the separate lego_orders_to_html.py script instead.",
+    )
+    parser.add_argument(
+        "--no-html", action="store_true",
+        help="Don't write the HTML report.",
     )
     parser.add_argument(
         "--no-tracking", action="store_true",
@@ -2042,7 +2051,7 @@ def main():
         include_tracking=not args.no_tracking,
     )
 
-    if args.html:
+    if args.html and not args.no_html:
         write_html_report(orders, args.html, include_tracking=not args.no_tracking)
         print(f"Wrote {args.html}")
 

@@ -5,6 +5,8 @@ import contextlib, datetime, io, subprocess, sys
 import unittest.mock as mock
 sys.path.insert(0, SRC)
 import lego_orders_scraper as sc
+import os, tempfile
+os.chdir(tempfile.mkdtemp(prefix="lego_cli_"))  # main() writes lego_orders.html by default; keep it out of the repo
 
 assert sc.__version__.isdigit()
 out = subprocess.run([sys.executable, SRC + "/lego_orders_scraper.py", "--version"], capture_output=True, text=True)
@@ -43,4 +45,20 @@ with mock.patch.object(sc, "scrape", lambda **kw: [order]), mock.patch.object(sy
     sc.main()
 assert "T1" in hp.read_text()
 print("--html writes the HTML report from the run's orders: OK")
+
+# HTML report is ON by default (lego_orders.html in the current folder); --no-html skips it.
+here = pathlib.Path(tempfile.mkdtemp(prefix="lego_html_default_"))
+os.chdir(here)
+with mock.patch.object(sc, "scrape", lambda **kw: [order]), mock.patch.object(sys, "argv", ["x"]), \
+     contextlib.redirect_stdout(io.StringIO()) as out:
+    sc.main()
+assert (here / "lego_orders.html").is_file() and "T1" in (here / "lego_orders.html").read_text()
+assert "Wrote lego_orders.html" in out.getvalue()
+(here / "lego_orders.html").unlink()
+with mock.patch.object(sc, "scrape", lambda **kw: [order]), mock.patch.object(sys, "argv", ["x", "--no-html"]), \
+     contextlib.redirect_stdout(io.StringIO()):
+    sc.main()
+assert not (here / "lego_orders.html").exists()
+assert sc.DEFAULT_HTML_PATH == "lego_orders.html"
+print("No --html given -> lego_orders.html written by default; --no-html skips it: OK")
 print("\nALL VERSION/CLI TESTS PASSED")

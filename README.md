@@ -51,7 +51,8 @@ Your login is saved in `./lego_browser_profile/`, so later runs skip the login (
 python3 lego_orders_scraper.py --since-date all          # entire order history (no date cutoff)
 python3 lego_orders_scraper.py --since-date 01/31/2026   # only orders on/after this date
 python3 lego_orders_scraper.py --max-orders 5            # only the 5 most recent orders
-python3 lego_orders_scraper.py --html lego_orders.html   # also write the HTML report
+python3 lego_orders_scraper.py --html report.html        # HTML report to another file (default lego_orders.html)
+python3 lego_orders_scraper.py --no-html                 # skip the HTML report
 python3 lego_orders_scraper.py --headless                # no browser window (only once logged in)
 python3 lego_orders_scraper.py --fresh                   # ignore saved progress, refetch everything
 python3 lego_orders_scraper.py --no-tracking             # leave tracking numbers out of the files
@@ -66,7 +67,8 @@ python3 lego_orders_scraper.py --version
 | `--max-orders N` | all | Only fetch the N most recent orders. |
 | `--output PATH` | `lego_orders.json` | JSON output file. |
 | `--csv PATH` | `lego_order_items.csv` | CSV output file (one row per item). |
-| `--html PATH` | not written | Also write a self-contained HTML report. |
+| `--html PATH` | `lego_orders.html` | Where to write the self-contained HTML report. |
+| `--no-html` | off | Skip the HTML report. |
 | `--headless` | off | Run with no visible browser. Only works after you've logged in once. |
 | `--fresh` | off | Refetch every order instead of resuming. |
 | `--no-tracking` | off | Leave tracking numbers out of the JSON, CSV and HTML. The column stays, just empty. |
@@ -107,6 +109,7 @@ python3 lego_orders_webapp.py --no-browser     # don't auto-open a browser tab
 ```
 
 - On first run a Chromium window opens. Log in there, then click **"I've logged in, continue"** on the web page.
+- The **HTML report path** box starts as `lego_orders.html`. Clear it to skip the report.
 - The **Leave out tracking numbers** checkbox is the same as `--no-tracking`.
 - **Stop** asks the scraper to finish gracefully. Clicking it a second time stops it immediately.
 - Result files appear as download links when the run finishes.
@@ -204,7 +207,7 @@ More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README
 |---|---|
 | `lego_orders.json` | One object per order, with a nested `items` list. |
 | `lego_order_items.csv` | One row per item. Opens in Excel / Numbers / Google Sheets. |
-| `lego_orders.html` | Self-contained report (all orders, items, monthly spending). Just open it in a browser. |
+| `lego_orders.html` | Self-contained report (all orders, items, monthly spending). Just open it in a browser. Written every run unless you use `--no-html`. |
 
 Prices: each item has `regular_price` and `sale_price`. They're equal when the item wasn't on sale, and both are empty for free gifts.
 

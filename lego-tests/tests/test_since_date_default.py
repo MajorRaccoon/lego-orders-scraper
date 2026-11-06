@@ -6,6 +6,8 @@ sys.path.insert(0, SRC)
 import lego_orders_scraper as sc
 import lego_orders_webapp as wa
 import unittest.mock as mock
+import os, tempfile
+os.chdir(tempfile.mkdtemp(prefix="lego_sdd_"))  # main() writes lego_orders.html by default; keep it out of the repo
 
 assert sc.DEFAULT_SINCE_DATE == "02/01/2024" == wa.DEFAULT_SINCE_DATE
 print("CLI and web default constants agree on 02/01/2024: OK")
