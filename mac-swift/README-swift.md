@@ -62,6 +62,6 @@ mac-swift/
 - Run the unit tests: `cd mac-swift && swift test`
 - Check that Swift and Python agree byte for byte: `python3 lego-tests/tests/test_swift_parity.py` (also part of `lego-tests/run_tests.py`).
 - Run from source without bundling: `swift run LegoOrderScraperApp`
-- Self-check without clicking anything: `LEGO_SELFCHECK=/tmp/check "dist/LEGO Order Scraper.app/Contents/MacOS/LEGO Order Scraper"`. It loads LEGO.com, saves `window.png`, `page.png` and `state.txt` into that folder, then quits.
+- Self-check without clicking anything: `LEGO_SELFCHECK=/tmp/check "dist/LEGO Order Scraper.app/Contents/MacOS/LEGO Order Scraper"`. It loads LEGO.com, saves `window.png`, `page.png`, `state.txt`, `main-text.txt` and `main.html` into that folder, then quits. Add `LEGO_SELFCHECK_URL=<url>` to load a specific page, such as one order's detail page, instead of My Orders.
 - If LEGO changes its pages, fix the parser in **both** `lego_orders_scraper.py` and `Sources/LegoCore/Parsing.swift`. The parity test catches any mismatch.
 - Bump `legoSwiftVersion` in `Sources/LegoCore/Models.swift` on every change.

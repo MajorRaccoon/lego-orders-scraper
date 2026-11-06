@@ -4,20 +4,27 @@ A personal tool that downloads **your own** LEGO.com order history, with item-le
 
 For every order it records the order number, date, status and total. For every item it records the name, item number or SKU, quantity, regular and sale price, free-gift / backorder / gift-card / loose-piece flags, custom build IDs (Minifigure Factory) and tracking number. The HTML report also has a **monthly spending table** and a **bar chart of monthly spending for each year**.
 
-It drives a real Chromium browser with [Playwright](https://playwright.dev/python/). **You log in to LEGO.com yourself** in that browser window (so CAPTCHA and 2FA work normally). The tool never asks for or stores your password.
+It reads LEGO.com through a real web browser. **You log in to LEGO.com yourself** in that browser (so CAPTCHA and 2FA work normally). The tool never asks for or stores your password. Which browser depends on how you run it:
+
+- **Command line, web UI and Docker** drive a Chromium browser with [Playwright](https://playwright.dev/python/), which is written in Python.
+- **The macOS app** is written in Swift and uses Apple's built-in **WebKit**, the engine behind Safari, inside its own window. It needs no Python, no Playwright and no Chromium download.
+
+Both read the same pages and produce identical files. The tests check this.
 
 There are four ways to run it:
 
-| Option | Best for | Section |
-|---|---|---|
-| Command line | Full control, scripting | [Command line](#1-command-line) |
-| Web UI | Point-and-click, on your own machine | [Web UI](#2-web-ui) |
-| Docker | Nothing to install except Docker | [Docker](#3-docker) |
-| macOS app | Native Mac app (Swift), log in inside the window | [macOS app](#4-macos-app) |
+| Option | Best for | Browser | Section |
+|---|---|---|---|
+| Command line | Full control, scripting | Chromium (Playwright) | [Command line](#1-command-line) |
+| Web UI | Point-and-click, on your own machine | Chromium (Playwright) | [Web UI](#2-web-ui) |
+| Docker | Nothing to install except Docker | Chromium (Playwright), inside the container | [Docker](#3-docker) |
+| macOS app | Native Mac app, log in inside the window | WebKit (built into macOS) | [macOS app](#4-macos-app) |
 
 ---
 
-## Requirements
+## Requirements (command line and web UI)
+
+Docker and the macOS app don't need any of this.
 
 - Python **3.10+** (on a Mac: `brew install python`)
 - Python packages: `playwright`, `cryptography`, `flask` (Flask is only needed for the web UI)
@@ -175,7 +182,7 @@ More details: [`docker/README-docker.md`](docker/README-docker.md).
 
 ## 4. macOS app
 
-A native Mac app written in Swift. LEGO.com appears inside the app window, so you log in right there. It needs no Python and downloads no extra browser. Files are in [`mac-swift/`](mac-swift/).
+A native Mac app written in Swift. It uses macOS's built-in **WebKit** (Safari's engine) instead of Playwright and Chromium. LEGO.com appears inside the app window, so you log in right there. It needs no Python and downloads no extra browser. Files are in [`mac-swift/`](mac-swift/).
 
 ### Build it (once)
 
@@ -248,15 +255,17 @@ Prices: each item has `regular_price` and `sale_price`. They're equal when the i
 
 | Variable | Used for |
 |---|---|
-| `LEGO_WORK_DIR` | Folder for output files (web UI / app) |
-| `LEGO_PROFILE_DIR` | Browser profile (saved login) folder |
+| `LEGO_WORK_DIR` | Folder for output files (web UI / older Python Mac app) |
+| `LEGO_PROFILE_DIR` | Chromium profile (saved login) folder |
 | `PLAYWRIGHT_BROWSERS_PATH` | Where Playwright's Chromium is installed |
 | `LEGO_WEB_PORT` | Docker: web UI port on your machine (default 8765) |
 | `LEGO_TZ` | Docker: browser timezone (default America/New_York) |
 | `LEGO_NOVNC_PORT` | Port shown for the noVNC login view |
-| `LEGO_APP_MODE` | Mac app: `window` or `browser` |
-| `LEGO_APP_DATA_DIR` | Mac app: data folder |
-| `LEGO_SKIP_BROWSER_INSTALL` | Mac app: skip the first-run Chromium download |
+| `LEGO_APP_MODE` | Older Python Mac app (`mac-app/`): `window` or `browser` |
+| `LEGO_APP_DATA_DIR` | Older Python Mac app: data folder |
+| `LEGO_SKIP_BROWSER_INSTALL` | Older Python Mac app: skip the first-run Chromium download |
+| `LEGO_SELFCHECK` | Swift Mac app: self-check mode (see [`mac-swift/README-swift.md`](mac-swift/README-swift.md)) |
+| `LEGO_SELFCHECK_URL` | Swift Mac app: page the self-check loads (default: My Orders) |
 
 ---
 
