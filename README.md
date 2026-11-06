@@ -13,7 +13,7 @@ There are four ways to run it:
 | Command line | Full control, scripting | [Command line](#1-command-line) |
 | Web UI | Point-and-click, on your own machine | [Web UI](#2-web-ui) |
 | Docker | Nothing to install except Docker | [Docker](#3-docker) |
-| macOS app | Double-click Mac app | [macOS app](#4-macos-app) |
+| macOS app | Native Mac app (Swift), log in inside the window | [macOS app](#4-macos-app) |
 
 ---
 
@@ -167,32 +167,31 @@ More details: [`docker/README-docker.md`](docker/README-docker.md).
 
 ## 4. macOS app
 
-A double-clickable Mac app with a native window, the same options screen and the same scraper. Files are in [`mac-app/`](mac-app/).
+A native Mac app written in Swift. LEGO.com appears inside the app window, so you log in right there. It needs no Python and downloads no extra browser. Files are in [`mac-swift/`](mac-swift/).
 
 ### Build it (once)
 
-Needs Python 3.10+ and the Xcode command-line tools (`xcode-select --install`).
+Needs macOS 13+ and Xcode (or the command-line tools: `xcode-select --install`).
 
 ```bash
-cd mac-app
-./build_mac.sh
+cd mac-swift
+./build_app.sh
 ```
 
-The result is `mac-app/dist/LEGO Order Scraper.app`. Drag **the `.app` itself** to Applications. Don't drag the program file from inside it.
+The result is `mac-swift/dist/LEGO Order Scraper.app` (Apple Silicon and Intel). Drag **the `.app` itself** to Applications.
 
 ### Use it
 
-1. Double-click **LEGO Order Scraper**.
-2. The first **Start** downloads Chromium (~150 MB, once).
-3. Log in to LEGO.com in the window that opens, then click **"I've logged in, continue"**.
-4. Results appear as download links, or click **Open data folder**.
+1. Double-click **LEGO Order Scraper**, choose your options, and click **Start**.
+2. First time only: log in to LEGO.com in the browser on the right side of the window. The app continues by itself once your orders appear.
+3. When it's done, click **Open HTML report** or **Show files in Finder**.
 
-- Data: `~/Library/Application Support/LEGO Order Scraper/` (delete it to reset)
+- Data: `~/Library/Application Support/LEGO Order Scraper/` (same files and format as the command line, so runs resume across versions)
 - Log: `~/Library/Logs/LEGO Order Scraper.log`
 
 The app isn't notarized. If macOS blocks it, right-click the app, choose **Open**, then **Open** again.
 
-More details and troubleshooting: [`mac-app/README-mac.md`](mac-app/README-mac.md).
+More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README-swift.md). The older Python-based Mac app is still in [`mac-app/`](mac-app/README-mac.md).
 
 ---
 
@@ -230,6 +229,12 @@ Prices: each item has `regular_price` and `sale_price`. They're equal when the i
   ```bash
   python3 lego-tests/run_tests.py
   ```
+  On a Mac with Xcode, this suite also checks that the Swift app's parsers and writers match the Python ones byte for byte.
+- The Swift app's own unit tests:
+  ```bash
+  cd mac-swift && swift test
+  ```
+- The Swift app re-implements the parsers in `mac-swift/Sources/LegoCore/Parsing.swift`. If LEGO changes its pages, fix both versions.
 
 ### Environment variables
 

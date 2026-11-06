@@ -33,3 +33,8 @@ mac-app/dist/
 
 # macOS
 .DS_Store
+
+# Swift build output
+mac-swift/.build/
+mac-swift/dist/
+.swiftpm/
