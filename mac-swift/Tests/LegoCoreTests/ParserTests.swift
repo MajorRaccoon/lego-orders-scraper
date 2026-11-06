@@ -179,6 +179,17 @@ final class ParserTests: XCTestCase {
         }
     }
 
+    /// "In Process" orders list their items under "Pre-order"; e-gift cards have no status.
+    func testPreOrderStatus() {
+        let items = parseOrderDetail("Cancel order\nPre-order\nFreight Depot\nItem: 910072\nQuantity: 2\nPrice$439.98\n"
+            + "Digital gifting\nLEGO E-Gift Card\nQuantity: 1\nPrice$200.00\n")
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[0].status, "Pre-order"); XCTAssertEqual(items[0].salePrice, "439.98")
+        XCTAssertTrue(items[1].isGiftCard)
+        XCTAssertNil(items[1].status)                 // "Digital gifting" clears the pre-order status
+        XCTAssertNil(items[1].trackingNumber)
+    }
+
     func testOrderSummary() {
         let two = parseOrderSummary("Items...\nOrder summary\nSubtotal\n$754.96\nDelivery\n$0.00\nTax\n$54.08\nLEGO® Insiders discount\n-$9.00\nTotal\n$800.04\n")
         XCTAssertEqual(two.keys, ["subtotal", "delivery", "tax", "insiders_discount", "total"])

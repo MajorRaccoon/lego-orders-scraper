@@ -57,6 +57,9 @@ LEGO\u00ae Insiders discount\n-$9.00\nTotal\n$800.04\n""",
     "Set A\nItem: 1\nQuantity: 1\nPrice$119.99\nFree\nItem: 2\nQuantity: 1\nPrice-\nTag\nItem: 3\nQuantity: 2\n"
     "Price$9.99\nproduct.salePrice$4.99\nIns\nItem: 4\nQuantity: 1\nPrice$69.99$48.99LEGO® Insiders Price\n"
     "Gift\nQuantity: 1\nPrice $25.00\nOdd\nItem: 5\nQuantity: 1\nPricey$5.00\n-$15.00\nPrice$\nPrice match\n",
+    # "In Process" orders: items under a "Pre-order" label; e-gift cards under "Digital gifting".
+    "Cancel order\nPre-order\nDepot\nItem: 910072\nQuantity: 2\nPrice$439.98\nShipped\nTracking number: 1Z9\n"
+    "Tag\nItem: 7\nQuantity: 1\nPrice$9.99\nDigital gifting\nLEGO E-Gift Card\nQuantity: 1\nPrice$200.00\n",
 ]
 
 for text in LISTS:

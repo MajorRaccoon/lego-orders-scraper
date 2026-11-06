@@ -147,7 +147,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "33"  # bump by 1 with every change to this script
+__version__ = "34"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -460,6 +460,7 @@ def load_chrome_cookies_for_domain(profile_path, domain_substring):
 STATUS_WORDS = {
     "Shipped", "Delivered", "Backordered", "In Warehouse",
     "Processing", "Cancelled", "Canceled", "Returned", "Refunded", "Pending",
+    "Pre-order",  # items of an "In Process" order that hasn't shipped yet
 }
 
 
@@ -971,6 +972,14 @@ def parse_order_detail(text):
 
         if line in STATUS_WORDS:
             current_status = line
+            i += 1
+            continue
+
+        if line.lower() == "digital gifting":
+            # E-gift cards are emailed, not shipped: the shipment status and
+            # tracking number of the section above don't apply to them.
+            current_status = None
+            current_tracking = None
             i += 1
             continue
 

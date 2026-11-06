@@ -8,6 +8,7 @@ import Foundation
 public let statusWords: Set<String> = [
     "Shipped", "Delivered", "Backordered", "In Warehouse",
     "Processing", "Cancelled", "Canceled", "Returned", "Refunded", "Pending",
+    "Pre-order",  // items of an "In Process" order that hasn't shipped yet
 ]
 
 /// Every "Order Number: Txxx" in page text, in page order.
@@ -167,6 +168,13 @@ public func parseOrderDetail(_ text: String) -> [LegoOrderLine] {
         }
         if statusWords.contains(line) {
             currentStatus = line
+            i += 1
+            continue
+        }
+        if line.lowercased() == "digital gifting" {
+            // E-gift cards are emailed, not shipped: the section above's status/tracking don't apply.
+            currentStatus = nil
+            currentTracking = nil
             i += 1
             continue
         }
