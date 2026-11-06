@@ -92,11 +92,23 @@ public func ordersCSV(_ orders: [LegoOrder]) -> String {
     return rows.map { $0.map(csvField).joined(separator: ",") + "\r\n" }.joined()
 }
 
+/// Copies of `orders` with every item's tracking number blanked ("Leave out tracking numbers").
+/// The field/column stays in every file, just empty, so files keep the same shape.
+public func withoutTracking(_ orders: [LegoOrder]) -> [LegoOrder] {
+    orders.map { o in
+        var c = o
+        for i in c.items.indices { c.items[i].trackingNumber = nil }
+        return c
+    }
+}
+
 /// Write the JSON and CSV files atomically. Safe to call after every order.
+/// includeTracking false blanks every tracking number.
 public func writeOutputs(_ orders: [LegoOrder], json: URL, csv: URL, quiet: Bool = false,
-                         log: (String) -> Void = { _ in }) throws {
+                         includeTracking: Bool = true, log: (String) -> Void = { _ in }) throws {
     // Dedupe here too so JSON and CSV are always built from the same list.
-    let orders = dedupeOrders(orders, log: log)
+    var orders = dedupeOrders(orders, log: log)
+    if !includeTracking { orders = withoutTracking(orders) }
     try atomicWrite(json, text: ordersJSON(orders))
     try atomicWrite(csv, text: ordersCSV(orders))
     guard !quiet else { return }

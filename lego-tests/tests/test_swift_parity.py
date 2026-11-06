@@ -126,6 +126,16 @@ stamp = re.search(r'<p class="generated">Generated ([^<]*)</p>', (tmp / "sw.html
 assert re.fullmatch(r"[A-Z][a-z]+ \d\d, \d{4} at \d\d:\d\d [AP]M", stamp), stamp
 print("HTML report: identical apart from the timestamp, which uses the same format: OK")
 
+# "Leave out tracking numbers": identical output with the option on, too.
+write_outputs(py_orders, tmp / "pyn.json", tmp / "pyn.csv", quiet=True, include_tracking=False)
+write_html_report(py_orders, tmp / "pyn.html", include_tracking=False)
+swift("render", str(src), str(tmp / "swn.json"), str(tmp / "swn.csv"), str(tmp / "swn.html"), "--no-tracking")
+assert (tmp / "swn.json").read_bytes() == (tmp / "pyn.json").read_bytes()
+assert (tmp / "swn.csv").read_bytes() == (tmp / "pyn.csv").read_bytes()
+assert no_stamp(tmp / "swn.html") == no_stamp(tmp / "pyn.html")
+assert "1Z999AA10123456784" not in (tmp / "swn.csv").read_text()
+print("No-tracking option: JSON/CSV/HTML identical between Swift and Python: OK")
+
 # A Python-written file loads in Swift and re-saves unchanged (and vice versa): resume works across versions.
 swift("render", str(tmp / "py.json"), str(tmp / "sw2.json"), str(tmp / "sw2.csv"), str(tmp / "sw2.html"))
 assert (tmp / "sw2.json").read_bytes() == (tmp / "py.json").read_bytes()

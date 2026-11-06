@@ -145,7 +145,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "30"  # bump by 1 with every change to this script
+__version__ = "31"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -1295,6 +1295,7 @@ def scrape(
     csv_path="lego_order_items.csv",
     fresh=False,
     since_date=None,
+    include_tracking=True,
 ):
     signal.signal(signal.SIGINT, _interrupt)
     _interrupt.count = 0  # reset in case scrape() is called more than once in this process
@@ -1433,7 +1434,8 @@ def scrape(
                     print(f"      failed to fetch this order, skipping it: {e}")
                     order.items = []
                     order.fetch_error = str(e)
-                write_outputs(orders, json_path, csv_path, quiet=True)
+                write_outputs(orders, json_path, csv_path, quiet=True,
+                              include_tracking=include_tracking)
                 time.sleep(delay)
 
         except KeyboardInterrupt:
@@ -1465,19 +1467,38 @@ def scrape(
                 except Exception:
                     pass
 
-    write_outputs(orders, json_path, csv_path)
+    write_outputs(orders, json_path, csv_path, include_tracking=include_tracking)
+    if not include_tracking:
+        orders = without_tracking(orders)
     return orders
 
 
-def write_outputs(orders, json_path, csv_path, quiet=False):
+def without_tracking(orders):
+    """Copies of `orders` with every item's tracking_number blanked (None).
+    Used by --no-tracking: the tracking_number field/column stays in every
+    output file (so the files keep the same shape and still resume/merge
+    normally), it's just empty. The originals are left untouched."""
+    stripped = []
+    for order in orders:
+        copy = LegoOrder.from_dict(order.to_dict())
+        for item in copy.items:
+            item.tracking_number = None
+        stripped.append(copy)
+    return stripped
+
+
+def write_outputs(orders, json_path, csv_path, quiet=False, include_tracking=True):
     """Write the current in-memory `orders` list to disk (both formats),
     atomically. Safe to call after every single order -- that's exactly
-    what `scrape()` does, so progress is never lost to an interruption."""
+    what `scrape()` does, so progress is never lost to an interruption.
+    include_tracking=False blanks every tracking number (--no-tracking)."""
     # Defensive: dedupe here too (not just in scrape()) so JSON and CSV are
     # always built from the exact same, duplicate-free list -- whatever
     # calls this function can't accidentally hand it a list with the same
     # order_number twice and get the two output files out of sync.
     orders = dedupe_orders(orders)
+    if not include_tracking:
+        orders = without_tracking(orders)
 
     def _write_json(tmp_path):
         with open(tmp_path, "w", encoding="utf-8") as f:
@@ -1888,11 +1909,14 @@ def render_orders_html(orders, title="LEGO Order History"):
     )
 
 
-def write_html_report(orders, html_path):
+def write_html_report(orders, html_path, include_tracking=True):
     """Write render_orders_html()'s output to html_path, atomically (same
     _atomic_write() used for the JSON/CSV outputs). Doesn't print anything
-    itself -- callers report what they wrote."""
+    itself -- callers report what they wrote. include_tracking=False blanks
+    every tracking number (--no-tracking)."""
     orders = dedupe_orders(orders)
+    if not include_tracking:
+        orders = without_tracking(orders)
 
     def _write_html(tmp_path):
         with open(tmp_path, "w", encoding="utf-8") as f:
@@ -1985,6 +2009,14 @@ def main():
         "without fetching anything, use the separate lego_orders_to_html.py "
         "script instead.",
     )
+    parser.add_argument(
+        "--no-tracking", action="store_true",
+        help="Leave tracking numbers out of the output files (JSON, CSV and "
+        "HTML). The tracking_number field/column is still there, just empty, "
+        "so the files keep the same shape. Note: orders saved while this is "
+        "on are saved without tracking numbers -- to get them back later, run "
+        "again without --no-tracking and with --fresh.",
+    )
     args = parser.parse_args()
 
     print(f"lego_orders_scraper.py v{__version__}")
@@ -2007,10 +2039,11 @@ def main():
         csv_path=args.csv,
         fresh=args.fresh,
         since_date=args.since_date,
+        include_tracking=not args.no_tracking,
     )
 
     if args.html:
-        write_html_report(orders, args.html)
+        write_html_report(orders, args.html, include_tracking=not args.no_tracking)
         print(f"Wrote {args.html}")
 
 

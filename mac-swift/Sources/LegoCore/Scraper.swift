@@ -41,6 +41,8 @@ public struct ScrapeOptions {
     public var loadMoreFinalWait: Double = 5.0
     public var sinceDate: SimpleDate? = defaultSinceDate
     public var fresh = false
+    /// false = leave tracking numbers out of the JSON, CSV and HTML (field kept, value empty).
+    public var includeTracking = true
     public var jsonURL: URL
     public var csvURL: URL
     public var htmlURL: URL?
@@ -192,7 +194,8 @@ public final class Scraper {
                     orders[idx].items = []
                     orders[idx].fetchError = "\(error)"
                 }
-                try writeOutputs(orders, json: o.jsonURL, csv: o.csvURL, quiet: true, log: log)
+                try writeOutputs(orders, json: o.jsonURL, csv: o.csvURL, quiet: true,
+                                 includeTracking: o.includeTracking, log: log)
                 try await page.sleep(o.delay)
             }
         } catch is CancellationError {
@@ -205,14 +208,14 @@ public final class Scraper {
                 + "\(o.csvURL.lastPathComponent) -- click Start again to pick up where this left off.")
         }
         if !orders.isEmpty || !cancelled {
-            try writeOutputs(orders, json: o.jsonURL, csv: o.csvURL, log: log)
+            try writeOutputs(orders, json: o.jsonURL, csv: o.csvURL, includeTracking: o.includeTracking, log: log)
             if let html = o.htmlURL {
-                try writeHTMLReport(orders, to: html)
+                try writeHTMLReport(orders, to: html, includeTracking: o.includeTracking)
                 log("Wrote \(html.lastPathComponent)")
             }
         }
         if cancelled { throw CancellationError() }
-        return orders
+        return o.includeTracking ? orders : withoutTracking(orders)
     }
 
     func fetchDetail(_ order: inout LegoOrder, delay: Double) async throws {

@@ -4,7 +4,7 @@
 //   lego-parity list [MAX] < page.txt       -> JSON list of orders (parse_order_list)
 //   lego-parity detail < page.txt           -> JSON list of items (parse_order_detail)
 //   lego-parity summary < page.txt          -> JSON object (_parse_order_summary)
-//   lego-parity render IN.json OUT.json OUT.csv OUT.html
+//   lego-parity render IN.json OUT.json OUT.csv OUT.html [--no-tracking]
 //                                           -> load IN.json and write all three outputs
 //   lego-parity dates < lines.txt           -> one parse result per line (order dates)
 import Foundation
@@ -32,10 +32,12 @@ case "summary":
     let s = parseOrderSummary(readStdin())
     out(JSONWriter.write(.object(s.pairs.map { ($0.key, $0.value.map(JSONValue.string) ?? .null) })))
 case "render":
-    guard args.count == 6 else { exit(2) }
+    guard args.count == 6 || (args.count == 7 && args[6] == "--no-tracking") else { exit(2) }
+    let tracking = args.count == 6
     let orders = try loadOrders(URL(fileURLWithPath: args[2]))
-    try writeOutputs(orders, json: URL(fileURLWithPath: args[3]), csv: URL(fileURLWithPath: args[4]), quiet: true)
-    try writeHTMLReport(orders, to: URL(fileURLWithPath: args[5]))
+    try writeOutputs(orders, json: URL(fileURLWithPath: args[3]), csv: URL(fileURLWithPath: args[4]), quiet: true,
+                     includeTracking: tracking)
+    try writeHTMLReport(orders, to: URL(fileURLWithPath: args[5]), includeTracking: tracking)
 case "dates":
     for line in readStdin().components(separatedBy: "\n") where !line.isEmpty {
         out((parseOrderDate(line)?.description ?? "None") + "\n")

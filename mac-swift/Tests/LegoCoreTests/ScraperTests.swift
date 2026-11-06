@@ -163,6 +163,26 @@ final class ScraperTests: XCTestCase {
         XCTAssertTrue(log.contains { $0.hasPrefix("Resuming: 2 order(s)") })
     }
 
+    func testLeaveOutTracking() async throws {
+        var o = options()
+        o.includeTracking = false
+        let orders = try await scraper(makeSite()).run(o)
+        XCTAssertNil(orders[0].items.first?.trackingNumber)
+        XCTAssertEqual(orders[0].items.first?.name, "Widget")                       // everything else intact
+        for f in [o.jsonURL, o.csvURL, o.htmlURL!] {
+            let text = try String(contentsOf: f)
+            XCTAssertFalse(text.contains("1Z"), f.lastPathComponent)
+        }
+        XCTAssertTrue(try String(contentsOf: o.jsonURL).contains("\"tracking_number\": null"))  // field kept
+        XCTAssertTrue(try String(contentsOf: o.csvURL).hasPrefix(csvHeader.joined(separator: ",")))
+
+        // Default keeps them.
+        try FileManager.default.removeItem(at: o.jsonURL)
+        let withTracking = try await scraper(makeSite()).run(options())
+        XCTAssertEqual(withTracking[0].items.first?.trackingNumber, "1Z")
+        XCTAssertTrue(try String(contentsOf: o.csvURL).contains(",1Z\r\n"))
+    }
+
     func testFailedOrderIsRecordedAndRetried() async throws {
         let site = makeSite()
         site.failingURLs = [orderDetailURL("T100")]

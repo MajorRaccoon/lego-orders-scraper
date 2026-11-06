@@ -66,7 +66,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
 
-__version__ = "5"  # this webapp's own version, independent of lego_orders_scraper.py's
+__version__ = "6"  # this webapp's own version, independent of lego_orders_scraper.py's
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRAPER_PATH = SCRIPT_DIR / "lego_orders_scraper.py"
@@ -139,6 +139,7 @@ def build_argv(config):
     _opt_str("csv", "--csv")
     _opt_str("cookie_source", "--cookie-source")
     _flag("fresh", "--fresh")
+    _flag("no_tracking", "--no-tracking")
 
     # Key absent -> flag omitted (scraper uses its own default). Key present
     # but blank -> the user cleared the box on purpose: fetch everything.
@@ -624,6 +625,10 @@ INDEX_HTML = r"""<!doctype html>
       <input type="checkbox" id="fresh">
       <label for="fresh">Fresh (ignore saved progress, refetch everything)</label>
     </div>
+    <div class="check">
+      <input type="checkbox" id="no_tracking">
+      <label for="no_tracking">Leave out tracking numbers (JSON, CSV and HTML)</label>
+    </div>
 
     <div class="actions">
       <button class="btn-start" id="btnStart">Start</button>
@@ -751,6 +756,7 @@ function collectConfig() {
     cookie_source: $("cookie_source").value,
     headless: $("headless").checked,
     fresh: $("fresh").checked,
+    no_tracking: $("no_tracking").checked,
   };
 }
 

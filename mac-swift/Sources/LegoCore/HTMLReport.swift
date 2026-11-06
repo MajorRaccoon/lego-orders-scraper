@@ -270,6 +270,7 @@ public func renderOrdersHTML(_ orders: [LegoOrder], title: String = "LEGO Order 
 }
 
 /// Write the HTML report atomically.
-public func writeHTMLReport(_ orders: [LegoOrder], to url: URL) throws {
-    try atomicWrite(url, text: renderOrdersHTML(dedupeOrders(orders)))
+public func writeHTMLReport(_ orders: [LegoOrder], to url: URL, includeTracking: Bool = true) throws {
+    let orders = dedupeOrders(orders)
+    try atomicWrite(url, text: renderOrdersHTML(includeTracking ? orders : withoutTracking(orders)))
 }

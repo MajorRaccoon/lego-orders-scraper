@@ -52,6 +52,8 @@ struct ContentView: View {
                         }
                         Toggle("Refetch everything (ignore saved progress)", isOn: $model.fresh)
                         Toggle("Also make an HTML report", isOn: $model.makeHTML)
+                        Toggle("Leave out tracking numbers", isOn: $model.leaveOutTracking)
+                            .help("Tracking numbers are left blank in the JSON, CSV and HTML files.")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(6)

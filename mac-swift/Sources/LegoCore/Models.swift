@@ -1,7 +1,7 @@
 import Foundation
 
 /// Version of the Swift port. Bump by 1 with every change to LegoCore or the app.
-public let legoSwiftVersion = "2"
+public let legoSwiftVersion = "3"
 
 public let baseURL = "https://www.lego.com"
 public let ordersURL = "\(baseURL)/en-us/member/orders"

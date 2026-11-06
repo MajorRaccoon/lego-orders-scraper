@@ -33,7 +33,7 @@ This runs the tests, then builds `mac-swift/dist/LEGO Order Scraper.app` (works 
 | Log | `~/Library/Logs/LEGO Order Scraper.log` |
 | Saved LEGO login | WebKit's storage for this app. Remove it with **Forget saved LEGO login**. |
 
-Options that match the command line: the since-date box is `--since-date`, **Max orders** is `--max-orders`, **Refetch everything** is `--fresh`, and **Advanced** has the three wait times (`--delay`, `--load-more-delay`, `--load-more-final-wait`). `--cookie-source` isn't needed because you log in inside the app.
+Options that match the command line: the since-date box is `--since-date`, **Max orders** is `--max-orders`, **Refetch everything** is `--fresh`, **Leave out tracking numbers** is `--no-tracking`, and **Advanced** has the three wait times (`--delay`, `--load-more-delay`, `--load-more-final-wait`). `--cookie-source` isn't needed because you log in inside the app.
 
 ## If orders come out wrong
 

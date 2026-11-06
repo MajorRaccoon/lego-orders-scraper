@@ -54,6 +54,7 @@ python3 lego_orders_scraper.py --max-orders 5            # only the 5 most recen
 python3 lego_orders_scraper.py --html lego_orders.html   # also write the HTML report
 python3 lego_orders_scraper.py --headless                # no browser window (only once logged in)
 python3 lego_orders_scraper.py --fresh                   # ignore saved progress, refetch everything
+python3 lego_orders_scraper.py --no-tracking             # leave tracking numbers out of the files
 python3 lego_orders_scraper.py --version
 ```
 
@@ -68,6 +69,7 @@ python3 lego_orders_scraper.py --version
 | `--html PATH` | not written | Also write a self-contained HTML report. |
 | `--headless` | off | Run with no visible browser. Only works after you've logged in once. |
 | `--fresh` | off | Refetch every order instead of resuming. |
+| `--no-tracking` | off | Leave tracking numbers out of the JSON, CSV and HTML. The column stays, just empty. |
 | `--delay SEC` | `1.5` | Wait between order-detail pages. Please keep it polite. |
 | `--load-more-delay SEC` | `1.2` | Wait after each "Load More" click on the order list. |
 | `--load-more-final-wait SEC` | `5.0` | How long to wait for "Load More" to reappear before assuming the list is done. Raise it if orders get cut off. |
@@ -105,6 +107,7 @@ python3 lego_orders_webapp.py --no-browser     # don't auto-open a browser tab
 ```
 
 - On first run a Chromium window opens. Log in there, then click **"I've logged in, continue"** on the web page.
+- The **Leave out tracking numbers** checkbox is the same as `--no-tracking`.
 - **Stop** asks the scraper to finish gracefully. Clicking it a second time stops it immediately.
 - Result files appear as download links when the run finishes.
 - It listens only on `127.0.0.1` (your machine). It has no password, so don't expose it to a network.
@@ -211,7 +214,7 @@ Prices: each item has `regular_price` and `sale_price`. They're equal when the i
 
 | Script | What it does |
 |---|---|
-| `lego_orders_to_html.py` | Rebuild the HTML report from an existing JSON file, without going to LEGO.com. `python3 lego_orders_to_html.py --json lego_orders.json --html lego_orders.html` |
+| `lego_orders_to_html.py` | Rebuild the HTML report from an existing JSON file, without going to LEGO.com. `python3 lego_orders_to_html.py --json lego_orders.json --html lego_orders.html` (add `--no-tracking` to leave tracking numbers out) |
 | `lego_repair_json_from_csv.py` | Fill in missing item detail in the JSON using the CSV. Makes a `.bak` backup first. |
 | `strip_non_ascii.py` | Remove non-ASCII characters (™, smart quotes, dashes) from a JSON or CSV file. Add `--in-place` to overwrite (makes a `.bak` backup). |
 | `lego_cookie_diagnose.py` | Step-by-step check of why `--cookie-source` isn't working. |

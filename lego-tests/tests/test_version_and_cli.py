@@ -24,13 +24,14 @@ print("version printed on startup: OK")
 
 seen, _ = run_main(["--max-orders", "5", "--headless", "--delay", "2.5", "--load-more-delay", "3",
                     "--load-more-final-wait", "9", "--output", "a.json", "--csv", "a.csv",
-                    "--cookie-source", "/p", "--fresh", "--since-date", "03/04/2025"])
+                    "--cookie-source", "/p", "--fresh", "--since-date", "03/04/2025", "--no-tracking"])
 assert seen == {"max_orders": 5, "headless": True, "delay": 2.5, "load_more_delay": 3.0,
                 "load_more_final_wait": 9.0, "cookie_source": "/p", "json_path": "a.json", "csv_path": "a.csv",
-                "fresh": True, "since_date": datetime.date(2025, 3, 4)}, seen
+                "fresh": True, "since_date": datetime.date(2025, 3, 4), "include_tracking": False}, seen
 seen, _ = run_main([])
 assert (seen["max_orders"], seen["headless"], seen["delay"], seen["load_more_delay"], seen["load_more_final_wait"],
-        seen["json_path"], seen["csv_path"], seen["fresh"]) == (None, False, 1.5, 1.2, 5.0, "lego_orders.json", "lego_order_items.csv", False)
+        seen["json_path"], seen["csv_path"], seen["fresh"], seen["include_tracking"]) == (
+        None, False, 1.5, 1.2, 5.0, "lego_orders.json", "lego_order_items.csv", False, True)
 print("every CLI option reaches scrape(); defaults unchanged: OK")
 
 # --html: writes the report from scrape()'s result

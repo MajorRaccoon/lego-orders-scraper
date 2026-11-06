@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     @Published var sinceDate: Date { didSet { defaults.set(sinceDate, forKey: "sinceDate") } }
     @Published var maxOrdersText: String { didSet { defaults.set(maxOrdersText, forKey: "maxOrders") } }
     @Published var fresh = false
+    @Published var leaveOutTracking: Bool { didSet { defaults.set(leaveOutTracking, forKey: "leaveOutTracking") } }
     @Published var makeHTML: Bool { didSet { defaults.set(makeHTML, forKey: "makeHTML") } }
     @Published var delay: Double { didSet { defaults.set(delay, forKey: "delay") } }
     @Published var loadMoreDelay: Double { didSet { defaults.set(loadMoreDelay, forKey: "loadMoreDelay") } }
@@ -47,6 +48,7 @@ final class AppModel: ObservableObject {
         sinceDate = d.object(forKey: "sinceDate") as? Date ?? defaultSinceDate.toDate()
         maxOrdersText = d.string(forKey: "maxOrders") ?? ""
         makeHTML = d.object(forKey: "makeHTML") as? Bool ?? true
+        leaveOutTracking = d.object(forKey: "leaveOutTracking") as? Bool ?? false
         delay = d.object(forKey: "delay") as? Double ?? 1.5
         loadMoreDelay = d.object(forKey: "loadMoreDelay") as? Double ?? 1.2
         loadMoreFinalWait = d.object(forKey: "loadMoreFinalWait") as? Double ?? 5.0
@@ -98,6 +100,7 @@ final class AppModel: ObservableObject {
         o.maxOrders = maxOrders
         o.sinceDate = useSinceDate ? SimpleDate(sinceDate) : nil
         o.fresh = fresh
+        o.includeTracking = !leaveOutTracking
         o.delay = max(0, delay)
         o.loadMoreDelay = max(0, loadMoreDelay)
         o.loadMoreFinalWait = max(0, loadMoreFinalWait)

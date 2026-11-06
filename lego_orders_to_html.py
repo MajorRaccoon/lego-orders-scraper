@@ -15,6 +15,7 @@ USAGE
 -----
     python lego_orders_to_html.py                       # uses the defaults
     python lego_orders_to_html.py --json lego_orders.json --html lego_orders.html
+    python lego_orders_to_html.py --no-tracking        # leave tracking numbers out
 """
 
 import argparse
@@ -30,14 +31,14 @@ from lego_orders_scraper import (  # reuse the same data model/rendering/atomic-
 )
 
 
-def convert(json_path, html_path):
+def convert(json_path, html_path, include_tracking=True):
     json_path = Path(json_path)
 
     with open(json_path, "r", encoding="utf-8") as f:
         raw_orders = json.load(f)
     orders = [LegoOrder.from_dict(o) for o in raw_orders]
 
-    write_html_report(orders, html_path)
+    write_html_report(orders, html_path, include_tracking=include_tracking)
 
     with_items = sum(1 for o in orders if o.items)
     print(
@@ -56,8 +57,10 @@ def main():
     )
     parser.add_argument("--json", default="lego_orders.json", help="Path to the JSON file to read.")
     parser.add_argument("--html", default="lego_orders.html", help="Path to the HTML file to write.")
+    parser.add_argument("--no-tracking", action="store_true",
+                        help="Leave tracking numbers out of the report.")
     args = parser.parse_args()
-    convert(args.json, args.html)
+    convert(args.json, args.html, include_tracking=not args.no_tracking)
 
 
 if __name__ == "__main__":
