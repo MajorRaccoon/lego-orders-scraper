@@ -38,3 +38,9 @@ mac-app/dist/
 mac-swift/.build/
 mac-swift/dist/
 .swiftpm/
+
+# Windows app build output
+windows-app/build/
+windows-app/dist/
+windows-app/.venv-build/
+windows-app/icon.ico

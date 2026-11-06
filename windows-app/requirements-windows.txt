@@ -1,0 +1,7 @@
+# Build-time requirements for the Windows app (see build_windows.ps1 / the GitHub Actions workflow)
+playwright>=1.56,<2
+cryptography
+flask
+pywin32
+pyinstaller>=6
+pillow

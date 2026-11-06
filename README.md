@@ -6,12 +6,12 @@ For every order it records the order number, date, status and total. For every i
 
 It reads LEGO.com through a real web browser. **You log in to LEGO.com yourself** in that browser (so CAPTCHA and 2FA work normally). The tool never asks for or stores your password. Which browser depends on how you run it:
 
-- **Command line, web UI and Docker** drive a Chromium browser with [Playwright](https://playwright.dev/python/), which is written in Python.
+- **Command line, web UI, Docker and the Windows app** drive a Chromium browser with [Playwright](https://playwright.dev/python/), which is written in Python.
 - **The macOS app** is written in Swift and uses Apple's built-in **WebKit**, the engine behind Safari, inside its own window. It needs no Python, no Playwright and no Chromium download.
 
 Both read the same pages and produce identical files. The tests check this.
 
-There are four ways to run it:
+There are five ways to run it:
 
 | Option | Best for | Browser | Section |
 |---|---|---|---|
@@ -19,6 +19,7 @@ There are four ways to run it:
 | Web UI | Point-and-click, on your own machine | Chromium (Playwright) | [Web UI](#2-web-ui) |
 | Docker | Nothing to install except Docker | Chromium (Playwright), inside the container | [Docker](#3-docker) |
 | macOS app | Native Mac app, log in inside the window | WebKit (built into macOS) | [macOS app](#4-macos-app) |
+| Windows app | Double-click on Windows, no Python needed | Chromium (Playwright) | [Windows app](#5-windows-app) |
 
 ---
 
@@ -215,9 +216,21 @@ More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README
 
 ---
 
+## 5. Windows app
+
+A double-clickable Windows app (Windows 10 or 11). It's the web UI packaged with its own Python, so there's nothing to install. It opens in your default browser, and a small console window shows progress. Files are in [`windows-app/`](windows-app/).
+
+- **Get it:** GitHub's Windows build server builds it automatically. Download **LEGO-Order-Scraper-windows** from the latest run of the **Windows app** workflow on the repo's **Actions** tab.
+- **Use it:** unzip it, keep the folder together, and double-click **LEGO Order Scraper.exe**. If SmartScreen warns, click **More info → Run anyway**.
+- Data and log: `%LOCALAPPDATA%\LEGO Order Scraper\`. Quit with **Quit app** on the page, or by closing the console window.
+
+Full details: [`windows-app/README-windows.md`](windows-app/README-windows.md).
+
+---
+
 ## Output files
 
-On a Mac, every version saves these in `~/Library/Application Support/LEGO Order Scraper/` and records runs in `~/Library/Logs/LEGO Order Scraper.log`. Docker uses its `lego-data` volume.
+On a Mac, every version saves these in `~/Library/Application Support/LEGO Order Scraper/` and records runs in `~/Library/Logs/LEGO Order Scraper.log`. On Windows they go in `%LOCALAPPDATA%\LEGO Order Scraper\` (log included). Docker uses its `lego-data` volume.
 
 | File | Contents |
 |---|---|
@@ -242,7 +255,7 @@ Prices: each item has `regular_price` and `sale_price`. They're equal when the i
 
 ## For developers
 
-- **The scripts in the repo root are the source of truth.** `docker/` and `mac-app/` hold copies. After editing a root script, run:
+- **The scripts in the repo root are the source of truth.** `docker/`, `mac-app/` and `windows-app/` hold copies (the app launcher's source is `mac-app/lego_orders_app.py`). After editing, run:
   ```bash
   ./sync_copies.sh
   ```
@@ -264,16 +277,16 @@ None of these are needed for normal use. They're for customizing a setup or for 
 
 | Variable | Applies to | Used for |
 |---|---|---|
-| `LEGO_WORK_DIR` | Command line, Web UI, Docker (the image sets it to `/data`), older Python Mac app | Data folder for output files (default on a Mac: `~/Library/Application Support/LEGO Order Scraper`; elsewhere: the current folder) |
-| `LEGO_LOG_FILE` | Command line, Web UI | Log file each run is recorded in (default on a Mac: `~/Library/Logs/LEGO Order Scraper.log`; elsewhere: none). Set it to an empty value to turn the log off. |
-| `LEGO_PROFILE_DIR` | Command line, Web UI, older Python Mac app | Folder for the saved Chromium login (default: `lego_browser_profile` next to the scraper). Docker doesn't use it; it keeps the login in its data volume. |
-| `PLAYWRIGHT_BROWSERS_PATH` | Command line, Web UI, older Python Mac app | Where Playwright's Chromium is installed (a Playwright setting). Docker's image already sets it. |
+| `LEGO_WORK_DIR` | Command line, Web UI, Docker (the image sets it to `/data`), Windows app, older Python Mac app | Data folder for output files (default on a Mac: `~/Library/Application Support/LEGO Order Scraper`; on Windows: `%LOCALAPPDATA%\LEGO Order Scraper`; on Linux: the current folder) |
+| `LEGO_LOG_FILE` | Command line, Web UI | Log file each run is recorded in (default on a Mac: `~/Library/Logs/LEGO Order Scraper.log`; on Windows: `%LOCALAPPDATA%\LEGO Order Scraper\LEGO Order Scraper.log`; on Linux: none). Set it to an empty value to turn the log off. |
+| `LEGO_PROFILE_DIR` | Command line, Web UI, Windows app, older Python Mac app | Folder for the saved Chromium login (default: `lego_browser_profile` next to the scraper). Docker doesn't use it; it keeps the login in its data volume. |
+| `PLAYWRIGHT_BROWSERS_PATH` | Command line, Web UI, Windows app, older Python Mac app | Where Playwright's Chromium is installed (a Playwright setting). Docker's image already sets it. |
 | `LEGO_WEB_PORT` | Docker | Web UI port on your machine (default `8765`). Set it when running `docker compose up`. |
 | `LEGO_TZ` | Docker | Timezone of the container's browser (default `America/New_York`). Set it when running `docker compose up --build`. |
 | `LEGO_NOVNC_PORT` | Docker (the image sets it) | Port of the noVNC login view that the web UI links to. Outside Docker it's unset, and no link is shown. |
-| `LEGO_APP_MODE` | Older Python Mac app (`mac-app/`) | Set by its launcher: `window` or `browser` |
-| `LEGO_APP_DATA_DIR` | Older Python Mac app | Its data folder |
-| `LEGO_SKIP_BROWSER_INSTALL` | Older Python Mac app | Skip its first-run Chromium download |
+| `LEGO_APP_MODE` | Older Python Mac app (`mac-app/`), Windows app | Set by the launcher: `window` (Mac) or `browser` (Windows; adds a **Quit app** button) |
+| `LEGO_APP_DATA_DIR` | Older Python Mac app, Windows app | Override the app's data folder |
+| `LEGO_SKIP_BROWSER_INSTALL` | Older Python Mac app, Windows app | Skip the first-run Chromium download |
 | `LEGO_SELFCHECK` | Mac Swift app | Self-check mode for developers (see [`mac-swift/README-swift.md`](mac-swift/README-swift.md)) |
 | `LEGO_SELFCHECK_URL` | Mac Swift app | Page the self-check loads (default: My Orders) |
 | `LEGO_SRC` | Test suite | Folder holding the scripts to test (default: this repository) |

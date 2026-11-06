@@ -66,20 +66,24 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
 
-__version__ = "10"  # this webapp's own version, independent of lego_orders_scraper.py's
+__version__ = "11"  # this webapp's own version, independent of lego_orders_scraper.py's
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRAPER_PATH = SCRIPT_DIR / "lego_orders_scraper.py"
 
 def _default_work_dir():
     """Same data folder rule as lego_orders_scraper.data_dir(): LEGO_WORK_DIR if
-    set (Docker: /data; the Python Mac app sets it too), else on macOS
-    ~/Library/Application Support/LEGO Order Scraper, else this script's folder."""
+    set (Docker: /data; the apps set it too), else on macOS ~/Library/Application
+    Support/LEGO Order Scraper, on Windows %LOCALAPPDATA%\\LEGO Order Scraper,
+    else this script's folder."""
     env = os.environ.get("LEGO_WORK_DIR")
     if env:
         return Path(env).expanduser()
     if platform.system() == "Darwin":
         return Path.home() / "Library" / "Application Support" / "LEGO Order Scraper"
+    if platform.system() == "Windows":
+        local = os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
+        return Path(local) / "LEGO Order Scraper"
     return SCRIPT_DIR
 
 
@@ -210,7 +214,7 @@ def scraper_env():
     Python Mac app this process's output already IS the log file (every scrape
     line is mirrored to it), so the scrape mustn't write to the log as well."""
     env = dict(os.environ, LEGO_WORK_DIR=str(WORK_DIR))
-    if APP_MODE:
+    if APP_MODE:  # the Mac or Windows app: its own log already mirrors every line
         env["LEGO_LOG_FILE"] = ""
     return env
 

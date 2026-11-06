@@ -1,0 +1,87 @@
+# Builds the Windows app (windows-app/) on a Windows machine and checks that it works:
+# the .exe starts, its bundled browser driver downloads and drives Chromium, and the
+# web server answers. The zip is attached to the run as "LEGO-Order-Scraper-windows".
+# Runs when the Windows app's files change, or on demand (Actions tab -> "Run workflow").
+name: Windows app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "windows-app/**"
+      - ".github/workflows/windows-app.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build requirements
+        run: python -m pip install -r windows-app/requirements-windows.txt
+
+      - name: Run the Python test suite on Windows (informational)
+        continue-on-error: true
+        run: python lego-tests/run_tests.py
+
+      - name: Make the icon
+        working-directory: windows-app
+        run: python -c "from PIL import Image; Image.open('icon.png').save('icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+      - name: Build the app
+        working-directory: windows-app
+        run: pyinstaller --noconfirm --clean LEGO_Order_Scraper_win.spec
+
+      - name: Check - the app starts and reports the scraper version
+        working-directory: windows-app
+        shell: pwsh
+        run: |
+          $out = & "dist\LEGO Order Scraper\LEGO Order Scraper.exe" --run-scraper --version
+          Write-Host $out
+          if ($out -notmatch "lego_orders_scraper.py \d+") { throw "unexpected --version output: $out" }
+
+      - name: Check - bundled browser driver downloads and drives Chromium
+        working-directory: windows-app
+        shell: pwsh
+        run: |
+          & "dist\LEGO Order Scraper\LEGO Order Scraper.exe" --self-test
+          if ($LASTEXITCODE -ne 0) { throw "self-test failed (exit $LASTEXITCODE)" }
+
+      - name: Check - the web server starts and answers
+        working-directory: windows-app
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\LEGO Order Scraper\LEGO Order Scraper.exe" -ArgumentList "--serve-only","--port","8799" -PassThru
+          try {
+            $cfg = $null
+            for ($i = 0; $i -lt 60 -and -not $cfg; $i++) {
+              Start-Sleep -Seconds 1
+              try { $cfg = Invoke-RestMethod -Uri "http://127.0.0.1:8799/config" -TimeoutSec 2 } catch {}
+            }
+            if (-not $cfg) { throw "server never answered on port 8799" }
+            Write-Host ("config: " + ($cfg | ConvertTo-Json -Compress))
+            if ($cfg.app_mode -ne "browser") { throw "expected app_mode=browser, got $($cfg.app_mode)" }
+            $page = Invoke-WebRequest -Uri "http://127.0.0.1:8799/" -UseBasicParsing
+            if ($page.Content -notmatch "LEGO") { throw "home page didn't load" }
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Zip
+        working-directory: windows-app
+        shell: pwsh
+        run: Compress-Archive -Force -Path "dist\LEGO Order Scraper" -DestinationPath "dist\LEGO-Order-Scraper-windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LEGO-Order-Scraper-windows
+          path: windows-app/dist/LEGO-Order-Scraper-windows.zip
+          retention-days: 30

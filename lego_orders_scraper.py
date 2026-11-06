@@ -153,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "37"  # bump by 1 with every change to this script
+__version__ = "38"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -174,27 +174,37 @@ APP_NAME = "LEGO Order Scraper"
 
 def data_dir():
     """The folder output files go in (and relative --output/--csv/--html paths
-    are resolved against). Same folder for every version on a Mac:
-      - LEGO_WORK_DIR, if set (Docker sets it to /data; the Python Mac app sets it too)
+    are resolved against). The same folder for every version on a given OS:
+      - LEGO_WORK_DIR, if set (Docker sets it to /data; the apps set it too)
       - on macOS: ~/Library/Application Support/LEGO Order Scraper
-      - anywhere else: the current folder"""
+      - on Windows: %LOCALAPPDATA%\\LEGO Order Scraper
+      - anywhere else (Linux): the current folder"""
     env = os.environ.get("LEGO_WORK_DIR")
     if env:
         return Path(env).expanduser()
     if platform.system() == "Darwin":
         return Path.home() / "Library" / "Application Support" / APP_NAME
+    if platform.system() == "Windows":
+        return _windows_local_appdata() / APP_NAME
     return Path.cwd()
+
+
+def _windows_local_appdata():
+    return Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
 
 
 def log_file_path():
     """Where each run's output is also recorded: LEGO_LOG_FILE if set (blank =
-    no log file), else on macOS ~/Library/Logs/LEGO Order Scraper.log (the
-    same log the Mac apps use), else no log file."""
+    no log file), else on macOS ~/Library/Logs/LEGO Order Scraper.log, on
+    Windows %LOCALAPPDATA%\\LEGO Order Scraper\\LEGO Order Scraper.log (the same
+    logs the apps use), else no log file."""
     env = os.environ.get("LEGO_LOG_FILE")
     if env is not None:
         return Path(env).expanduser() if env.strip() else None
     if platform.system() == "Darwin":
         return Path.home() / "Library" / "Logs" / f"{APP_NAME}.log"
+    if platform.system() == "Windows":
+        return _windows_local_appdata() / APP_NAME / f"{APP_NAME}.log"
     return None
 
 
