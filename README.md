@@ -122,6 +122,7 @@ python3 lego_orders_webapp.py --no-browser     # don't auto-open a browser tab
 - The **Leave out tracking numbers** checkbox is the same as `--no-tracking`.
 - **Stop** asks the scraper to finish gracefully. Clicking it a second time stops it immediately.
 - Result files appear as download links when the run finishes.
+- The web page keeps running after a scrape finishes, so you can start another one, and Terminal doesn't return to its prompt. When a scrape ends, Terminal shows a reminder. Press **Ctrl+C** in Terminal to quit.
 - It listens only on `127.0.0.1` (your machine). It has no password, so don't expose it to a network.
 
 ---

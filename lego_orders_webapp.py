@@ -66,7 +66,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
 
-__version__ = "7"  # this webapp's own version, independent of lego_orders_scraper.py's
+__version__ = "8"  # this webapp's own version, independent of lego_orders_scraper.py's
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRAPER_PATH = SCRIPT_DIR / "lego_orders_scraper.py"
@@ -97,6 +97,33 @@ _DEFAULT_OUTPUT_PATHS = {"output": "lego_orders.json", "csv": "lego_order_items.
 DEFAULT_SINCE_DATE = "02/01/2024"
 
 _SINCE_DATE_RE = re.compile(r"^\d{1,2}/\d{1,2}/\d{4}$")
+
+
+# Set in main(): the address this server is listening on, for the Terminal reminder.
+SERVE_URL = None
+
+
+def _interactive_terminal():
+    """True when this server was started by hand in a Terminal window -- not
+    inside Docker or the Mac app, where there's no Ctrl+C to press."""
+    try:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def finish_reminder(status, return_code, url=None):
+    """What to print in Terminal when a scrape ends: how it ended, and that
+    the web UI is still running until you press Ctrl+C."""
+    if status == "finished":
+        outcome = "Scrape finished."
+    elif status == "stopped":
+        outcome = "Scrape stopped."
+    else:
+        outcome = f"Scrape ended with an error (exit code {return_code})."
+    where = f" at {url}" if url else ""
+    return (f"{outcome} The web UI is still running{where} -- press Ctrl+C here "
+            "to quit, or start another scrape in the browser.")
 
 
 def build_argv(config):
@@ -286,6 +313,10 @@ class ScrapeJob:
                 else:
                     self.status = "error"
             self._append_line(f"\n[process exited with code {return_code}]")
+            # The server keeps running after a scrape, so remind whoever ran
+            # it from Terminal how to get their prompt back.
+            if _interactive_terminal():
+                print("\n" + finish_reminder(self.status, return_code, SERVE_URL), flush=True)
 
     def send_enter(self, text=""):
         with self.lock:
@@ -884,6 +915,8 @@ def main():
     args = parser.parse_args()
 
     url = f"http://{args.host}:{args.port}/"
+    global SERVE_URL
+    SERVE_URL = url
     print(f"lego_orders_webapp.py v{__version__}")
     print(f"Serving at {url} (Ctrl+C to stop)")
 
