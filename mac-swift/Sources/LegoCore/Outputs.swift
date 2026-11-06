@@ -102,6 +102,20 @@ public func withoutTracking(_ orders: [LegoOrder]) -> [LegoOrder] {
     }
 }
 
+/// The CSV's name before Swift app v7 / scraper v36.
+public let oldDefaultCSVName = "lego_order_items.csv"
+
+/// One-time switch to the new CSV name: if `csv` (lego_orders.csv) doesn't exist yet and an old
+/// lego_order_items.csv sits next to it, rename the old file. Same rule as the Python scraper.
+@discardableResult
+public func renameOldCSV(_ csv: URL) -> Bool {
+    let fm = FileManager.default
+    let old = csv.deletingLastPathComponent().appendingPathComponent(oldDefaultCSVName)
+    guard csv.lastPathComponent == "lego_orders.csv", !fm.fileExists(atPath: csv.path),
+          fm.fileExists(atPath: old.path) else { return false }
+    return (try? fm.moveItem(at: old, to: csv)) != nil
+}
+
 /// Write the JSON and CSV files atomically. Safe to call after every order.
 /// includeTracking false blanks every tracking number.
 public func writeOutputs(_ orders: [LegoOrder], json: URL, csv: URL, quiet: Bool = false,

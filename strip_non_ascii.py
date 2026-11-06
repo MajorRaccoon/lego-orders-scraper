@@ -32,7 +32,7 @@ USAGE
     python strip_non_ascii.py lego_orders.json -o clean.json
         # writes to a specific output path instead
 
-    python strip_non_ascii.py lego_orders.json lego_order_items.csv --in-place
+    python strip_non_ascii.py lego_orders.json lego_orders.csv --in-place
         # clean multiple files in one run
 """
 

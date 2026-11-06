@@ -130,7 +130,7 @@ final class ScraperTests: XCTestCase {
 
     func options() -> ScrapeOptions {
         var o = ScrapeOptions(jsonURL: tmp.appendingPathComponent("lego_orders.json"),
-                              csvURL: tmp.appendingPathComponent("lego_order_items.csv"),
+                              csvURL: tmp.appendingPathComponent("lego_orders.csv"),
                               htmlURL: tmp.appendingPathComponent("lego_orders.html"))
         o.sinceDate = SimpleDate(year: 2026, month: 1, day: 1)
         o.delay = 0
@@ -151,7 +151,7 @@ final class ScraperTests: XCTestCase {
         XCTAssertTrue(orders[1].items.isEmpty)                                      // before the since date: not fetched
         XCTAssertTrue(orders[2].items.first?.isGiftCard ?? false)
         XCTAssertFalse(site.visited.contains(orderDetailURL("T200")))
-        for f in ["lego_orders.json", "lego_order_items.csv", "lego_orders.html"] {
+        for f in ["lego_orders.json", "lego_orders.csv", "lego_orders.html"] {
             XCTAssertTrue(FileManager.default.fileExists(atPath: tmp.appendingPathComponent(f).path), f)
         }
 

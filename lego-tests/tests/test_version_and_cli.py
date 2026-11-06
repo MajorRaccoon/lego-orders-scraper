@@ -33,7 +33,7 @@ assert seen == {"max_orders": 5, "headless": True, "delay": 2.5, "load_more_dela
 seen, _ = run_main([])
 assert (seen["max_orders"], seen["headless"], seen["delay"], seen["load_more_delay"], seen["load_more_final_wait"],
         seen["json_path"], seen["csv_path"], seen["fresh"], seen["include_tracking"]) == (
-        None, False, 1.5, 1.2, 5.0, "lego_orders.json", "lego_order_items.csv", False, True)
+        None, False, 1.5, 1.2, 5.0, "lego_orders.json", "lego_orders.csv", False, True)
 print("every CLI option reaches scrape(); defaults unchanged: OK")
 
 # --html: writes the report from scrape()'s result

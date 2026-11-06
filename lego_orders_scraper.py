@@ -82,7 +82,7 @@ anything from LEGO.com again, use the separate script instead:
 OUTPUT & RESUMING
 -----------------
 A JSON file (default lego_orders.json) — one object per order, each with a
-nested "items" list — and a flat CSV (default lego_order_items.csv) with one
+nested "items" list — and a flat CSV (default lego_orders.csv) with one
 row per item, handy for opening in Excel/Sheets. Each item has an "is_piece"
 flag: true for an individual loose part from a Bricks and Pieces / Pick A
 Brick order (identified by "SKU:" on the page), false for a normal set or
@@ -147,7 +147,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "35"  # bump by 1 with every change to this script
+__version__ = "36"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -156,6 +156,12 @@ DEFAULT_SINCE_DATE = "02/01/2024"
 # The HTML report is written by default, to this file (--html PATH to change it,
 # --no-html to skip it).
 DEFAULT_HTML_PATH = "lego_orders.html"
+
+# Default CSV file. Versions before v36 called it lego_order_items.csv; an old
+# file of that name next to a not-yet-created lego_orders.csv is renamed (see
+# _rename_old_csv) so it isn't left behind, stale, after the switch.
+DEFAULT_CSV_PATH = "lego_orders.csv"
+OLD_DEFAULT_CSV_NAME = "lego_order_items.csv"
 
 BASE = "https://www.lego.com"
 ORDERS_URL = f"{BASE}/en-us/member/orders"
@@ -1323,13 +1329,14 @@ def scrape(
     load_more_final_wait=5.0,
     cookie_source=None,
     json_path="lego_orders.json",
-    csv_path="lego_order_items.csv",
+    csv_path=DEFAULT_CSV_PATH,
     fresh=False,
     since_date=None,
     include_tracking=True,
 ):
     signal.signal(signal.SIGINT, _interrupt)
     _interrupt.count = 0  # reset in case scrape() is called more than once in this process
+    _rename_old_csv(csv_path)
     existing_by_number = {} if fresh else load_existing_orders(json_path)
     if existing_by_number:
         print(
@@ -1538,6 +1545,24 @@ def without_tracking(orders):
             item.tracking_number = None
         stripped.append(copy)
     return stripped
+
+
+def _rename_old_csv(csv_path):
+    """One-time switch to the new default name: if csv_path is lego_orders.csv,
+    doesn't exist yet, and an old lego_order_items.csv sits in the same folder,
+    rename the old file. (The CSV is rebuilt from the JSON on every run anyway,
+    so this only keeps the folder tidy.) Returns True if it renamed a file."""
+    new = Path(csv_path)
+    old = new.with_name(OLD_DEFAULT_CSV_NAME)
+    if new.name != DEFAULT_CSV_PATH or new.exists() or not old.is_file():
+        return False
+    try:
+        old.replace(new)
+    except OSError as e:
+        print(f"  (couldn't rename {old.name} to {new.name}: {e})")
+        return False
+    print(f"Renamed {old.name} to {new.name} (the CSV's new default name).")
+    return True
 
 
 def write_outputs(orders, json_path, csv_path, quiet=False, include_tracking=True):
@@ -2156,7 +2181,7 @@ def main():
         "--output", default="lego_orders.json", help="Output JSON file path."
     )
     parser.add_argument(
-        "--csv", default="lego_order_items.csv",
+        "--csv", default=DEFAULT_CSV_PATH,
         help="Output CSV file path (one row per item).",
     )
     parser.add_argument(

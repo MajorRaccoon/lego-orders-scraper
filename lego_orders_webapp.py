@@ -66,7 +66,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
 
-__version__ = "8"  # this webapp's own version, independent of lego_orders_scraper.py's
+__version__ = "9"  # this webapp's own version, independent of lego_orders_scraper.py's
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRAPER_PATH = SCRIPT_DIR / "lego_orders_scraper.py"
@@ -90,7 +90,7 @@ QUIT_HOOK = None  # the launcher installs a function here so /quit can shut the 
 # this run's output" links know where to look even when the user left the
 # output-path fields blank (in which case build_argv() omits the flag
 # entirely and the scraper falls back to these same defaults itself).
-_DEFAULT_OUTPUT_PATHS = {"output": "lego_orders.json", "csv": "lego_order_items.csv", "html": "lego_orders.html"}
+_DEFAULT_OUTPUT_PATHS = {"output": "lego_orders.json", "csv": "lego_orders.csv", "html": "lego_orders.html"}
 
 # Pre-filled in the form's "Since date" box. Must match DEFAULT_SINCE_DATE in
 # lego_orders_scraper.py (test_since_date_default.py checks they agree).
@@ -646,7 +646,7 @@ INDEX_HTML = r"""<!doctype html>
       </div>
       <div class="field">
         <label for="csv">Output CSV path</label>
-        <input type="text" id="csv" value="lego_order_items.csv">
+        <input type="text" id="csv" value="lego_orders.csv">
       </div>
       <div class="field">
         <label for="html">HTML report path</label>

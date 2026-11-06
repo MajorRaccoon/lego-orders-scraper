@@ -4,7 +4,7 @@ A native macOS app written in Swift/SwiftUI. It replaces the Python-based Mac ap
 
 - **No Python, no Chromium download.** The built-in browser uses WebKit, the same engine as Safari.
 - **Log in inside the app.** LEGO.com appears on the right side of the window. Your login is remembered between runs.
-- **Same results as the command line.** It writes the same `lego_orders.json`, `lego_order_items.csv` and `lego_orders.html`, byte for byte. You can switch between versions, and a run in one picks up where the other left off.
+- **Same results as the command line.** It writes the same `lego_orders.json`, `lego_orders.csv` and `lego_orders.html`, byte for byte. You can switch between versions, and a run in one picks up where the other left off.
 
 ## Build it (once)
 

@@ -73,7 +73,7 @@ python3 lego_orders_scraper.py --version
 | `--since-date MM/DD/YYYY` | `02/01/2024` | Only fetch orders placed on/after this date. Use `all` for no cutoff. Paging stops early once it passes the date. |
 | `--max-orders N` | all | Only fetch the N most recent orders. |
 | `--output PATH` | `lego_orders.json` | JSON output file. |
-| `--csv PATH` | `lego_order_items.csv` | CSV output file (one row per item). |
+| `--csv PATH` | `lego_orders.csv` | CSV output file (one row per item). |
 | `--html PATH` | `lego_orders.html` | Where to write the self-contained HTML report. |
 | `--no-html` | off | Skip the HTML report. |
 | `--headless` | off | Run with no visible browser. Only works after you've logged in once. |
@@ -216,7 +216,7 @@ More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README
 | File | Contents |
 |---|---|
 | `lego_orders.json` | One object per order, with a nested `items` list. |
-| `lego_order_items.csv` | One row per item. Opens in Excel / Numbers / Google Sheets. |
+| `lego_orders.csv` | One row per item. Opens in Excel / Numbers / Google Sheets. (Before scraper v36 it was called `lego_order_items.csv`; an old file of that name is renamed automatically.) |
 | `lego_orders.html` | Self-contained report (all orders, items, a monthly spending table and per-year bar charts). Just open it in a browser. Written every run unless you use `--no-html`. |
 
 Prices: each item has `regular_price` and `sale_price`. They're equal when the item wasn't on sale, and both are empty for free gifts.

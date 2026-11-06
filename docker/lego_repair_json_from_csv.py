@@ -28,7 +28,7 @@ gift-card flags, status, tracking number) is fully recovered either way.
 USAGE
 -----
     python lego_repair_json_from_csv.py                       # uses the defaults
-    python lego_repair_json_from_csv.py --json lego_orders.json --csv lego_order_items.csv
+    python lego_repair_json_from_csv.py --json lego_orders.json --csv lego_orders.csv
 
 A backup of the original JSON is written alongside it (e.g.
 lego_orders.json.bak) before anything is overwritten.
@@ -140,10 +140,10 @@ def repair(json_path, csv_path):
 def main():
     parser = argparse.ArgumentParser(
         description="Repair a lego_orders.json whose item detail for some orders is missing "
-        "but is still present in the matching lego_order_items.csv."
+        "but is still present in the matching lego_orders.csv."
     )
     parser.add_argument("--json", default="lego_orders.json", help="Path to the JSON file to repair (in place).")
-    parser.add_argument("--csv", default="lego_order_items.csv", help="Path to the CSV file to repair from.")
+    parser.add_argument("--csv", default="lego_orders.csv", help="Path to the CSV file to repair from.")
     args = parser.parse_args()
     repair(args.json, args.csv)
 

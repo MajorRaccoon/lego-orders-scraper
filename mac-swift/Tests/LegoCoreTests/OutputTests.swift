@@ -158,6 +158,19 @@ final class OutputTests: XCTestCase {
         XCTAssertFalse(renderOrdersHTML([]).contains("<figure"))
     }
 
+    func testRenameOldCSV() throws {
+        let new = tmp.appendingPathComponent("lego_orders.csv")
+        let old = tmp.appendingPathComponent("lego_order_items.csv")
+        try "OLD".write(to: old, atomically: true, encoding: .utf8)
+        XCTAssertTrue(renameOldCSV(new))
+        XCTAssertEqual(try String(contentsOf: new), "OLD")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
+        try "OLDER".write(to: old, atomically: true, encoding: .utf8)
+        XCTAssertFalse(renameOldCSV(new))                                   // never overwrites the new file
+        XCTAssertEqual(try String(contentsOf: new), "OLD")
+        XCTAssertFalse(renameOldCSV(tmp.appendingPathComponent("mine.csv")))  // custom names untouched
+    }
+
     func testJSONWriterMatchesPythonFormat() throws {
         let v = JSONValue.object([("a", .array([])), ("b", .object([])), ("c", .string("é\n\"\u{01}")), ("d", .null), ("e", .array([.int(1), .bool(true)]))])
         XCTAssertEqual(JSONWriter.write(v), "{\n  \"a\": [],\n  \"b\": {},\n  \"c\": \"é\\n\\\"\\u0001\",\n  \"d\": null,\n  \"e\": [\n    1,\n    true\n  ]\n}")

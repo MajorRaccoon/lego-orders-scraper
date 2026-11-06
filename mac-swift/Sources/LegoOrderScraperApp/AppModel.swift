@@ -37,7 +37,7 @@ final class AppModel: ObservableObject {
     let dataDir: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("LEGO Order Scraper", isDirectory: true)
     var jsonURL: URL { dataDir.appendingPathComponent("lego_orders.json") }
-    var csvURL: URL { dataDir.appendingPathComponent("lego_order_items.csv") }
+    var csvURL: URL { dataDir.appendingPathComponent("lego_orders.csv") }
     var htmlURL: URL { dataDir.appendingPathComponent("lego_orders.html") }
     let logFile: URL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Logs/LEGO Order Scraper.log")
@@ -54,6 +54,7 @@ final class AppModel: ObservableObject {
         loadMoreFinalWait = d.object(forKey: "loadMoreFinalWait") as? Double ?? 5.0
         savePageText = d.object(forKey: "savePageText") as? Bool ?? false
         try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
+        renameOldCSV(csvURL)
         refreshFiles()
         page.webView.load(URLRequest(url: URL(string: ordersURL)!))
     }
