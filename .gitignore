@@ -1,0 +1,35 @@
+# Personal notes (kept local)
+CLAUDE.md
+
+# Scraped order data - never commit
+*.json
+*.csv
+*.html
+!lego-tests/**/*.json
+!lego-tests/**/*.csv
+!lego-tests/**/*.html
+
+# Browser profile / login cookies
+*profile*/
+lego_browser_profile/
+browsers/
+*.cookies
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Mac app build output
+mac-app/build/
+mac-app/dist/
+*.icns
+*.iconset/
+
+# Zips and logs
+*.zip
+*.log
+
+# macOS
+.DS_Store

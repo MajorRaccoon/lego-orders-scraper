@@ -1,0 +1,4 @@
+# playwright must match the version in the base image tag (see Dockerfile)
+playwright==1.56.0
+cryptography
+flask

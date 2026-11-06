@@ -1,0 +1,7 @@
+# Build-time requirements for the macOS app (see build_mac.sh)
+playwright>=1.56,<2
+cryptography
+flask
+pywebview>=5
+pyinstaller>=6
+pillow

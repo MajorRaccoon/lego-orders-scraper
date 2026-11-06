@@ -1,0 +1,21 @@
+services:
+  lego-scraper:
+    build: .
+    image: lego-orders-scraper
+    ports:
+      # 127.0.0.1 = reachable only from this machine. The web UI has no
+      # login, so don't change these to 0.0.0.0 / a public address.
+      - "127.0.0.1:${LEGO_WEB_PORT:-8765}:5000"   # web UI (container port 5000 stays internal)
+      - "127.0.0.1:6080:6080"   # in-container browser view (for LEGO login)
+    volumes:
+      - lego-data:/data          # saved login + your JSON/CSV/HTML output
+    environment:
+      # Timezone the in-container browser uses (so order dates match what you
+      # see on LEGO.com). America/New_York = US Eastern, incl. daylight time.
+      # Change it, or: LEGO_TZ=America/Chicago docker compose up
+      - TZ=${LEGO_TZ:-America/New_York}
+    shm_size: "1gb"              # Chromium crashes with Docker's tiny default
+    restart: unless-stopped
+
+volumes:
+  lego-data:

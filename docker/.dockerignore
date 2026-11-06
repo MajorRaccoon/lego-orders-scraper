@@ -1,0 +1,8 @@
+# never bake cookies, saved orders, or caches into an image
+lego_browser_profile/
+__pycache__/
+*.json
+*.csv
+*.html
+*.bak
+.git
