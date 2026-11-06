@@ -122,11 +122,36 @@ private func collectPrices(_ lines: [String], _ i: inout Int) -> [String] {
     return raw
 }
 
+private let priceToken = "Price|product\\.salePrice|LEGO® Insiders Price|\\$[\\d,.]+|-"
+private let priceLabels: Set<String> = ["Price", "product.salePrice", "LEGO® Insiders Price"]
+
+/// Split a price line whose parts got run together back into separate lines.
+/// LEGO's "Price" label is visually hidden; Chromium's page text puts it on its own line, but
+/// WebKit (this app's browser) runs it into the amount: "Price$119.99", "Price-",
+/// "product.salePrice$4.99". A line made up entirely of 2+ price pieces, at least one a label,
+/// is split into those pieces; any other line comes back unchanged. Same as the Python version.
+public func splitGluedPriceLine(_ line: String) -> [String] {
+    let ns = line as NSString
+    let re = Rx.compile(priceToken)
+    var tokens: [String] = []
+    var pos = 0
+    while pos < ns.length {
+        guard let m = re.firstMatch(in: line, options: [.anchored], range: NSRange(location: pos, length: ns.length - pos))
+        else { return [line] }
+        tokens.append(ns.substring(with: m.range))
+        pos = m.range.location + m.range.length
+        while pos < ns.length, let u = Unicode.Scalar(ns.character(at: pos)),
+              CharacterSet.whitespacesAndNewlines.contains(u) { pos += 1 }
+    }
+    if tokens.count >= 2 && tokens.contains(where: priceLabels.contains) { return tokens }
+    return [line]
+}
+
 /// Parse an order-details page into line items. Handles normal items, free gifts, sale and
 /// Insiders prices, multiple shipments with tracking numbers, per-item status lines,
 /// Bricks and Pieces (SKU) pieces, digital gift cards, and custom IDs (Minifigure Factory).
 public func parseOrderDetail(_ text: String) -> [LegoOrderLine] {
-    let lines = nonEmptyStrippedLines(text)
+    let lines = nonEmptyStrippedLines(text).flatMap(splitGluedPriceLine)
     let n = lines.count
     var items: [LegoOrderLine] = []
     var currentStatus: String?

@@ -145,7 +145,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "29"  # bump by 1 with every change to this script
+__version__ = "30"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -880,6 +880,35 @@ def _parse_order_summary(text):
     return result
 
 
+_PRICE_TOKEN_RE = re.compile(r"Price|product\.salePrice|LEGO® Insiders Price|\$[\d,.]+|-")
+_PRICE_LABELS = {"Price", "product.salePrice", "LEGO® Insiders Price"}
+
+
+def _split_glued_price_line(line):
+    """Split a price line whose parts got run together back into separate lines.
+
+    LEGO's "Price" label is a visually-hidden element. Chromium's page text puts
+    it on its own line ("Price" / "$119.99"), but Safari/WebKit (used by the
+    native Mac app) runs it into the amount: "Price$119.99", "Price-" (free
+    gift), "product.salePrice$4.99". A line made up entirely of 2+ price pieces
+    (a label, "$X.XX" amounts, "-"), at least one of them a label, is split into
+    those pieces; any other line comes back unchanged.
+    """
+    tokens = []
+    pos = 0
+    while pos < len(line):
+        m = _PRICE_TOKEN_RE.match(line, pos)
+        if not m:
+            return [line]
+        tokens.append(m.group())
+        pos = m.end()
+        while pos < len(line) and line[pos].isspace():
+            pos += 1
+    if len(tokens) >= 2 and any(t in _PRICE_LABELS for t in tokens):
+        return tokens
+    return [line]
+
+
 def parse_order_detail(text):
     """Parse an order-details page's text into a flat list of LegoOrderLine
     objects.
@@ -915,7 +944,11 @@ def parse_order_detail(text):
     Every item's "name" has non-ASCII characters stripped out (TM/(R)
     symbols, etc.) -- see _clean_item_name() for exactly how.
     """
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    lines = [
+        part
+        for l in text.split("\n") if l.strip()
+        for part in _split_glued_price_line(l.strip())
+    ]
     items = []
     current_status = None
     current_tracking = None

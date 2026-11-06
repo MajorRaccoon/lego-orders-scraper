@@ -24,7 +24,9 @@ enum SelfCheck {
             try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             var gotoResult = "ok"
-            do { try await model.page.goto(ordersURL, timeout: 30) } catch { gotoResult = "\(error)" }
+            // LEGO_SELFCHECK_URL: optional page to load instead of My Orders (e.g. one order's detail page).
+            let target = ProcessInfo.processInfo.environment["LEGO_SELFCHECK_URL"] ?? ordersURL
+            do { try await model.page.goto(target, timeout: 30) } catch { gotoResult = "\(error)" }
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             await model.page.dismissInterstitials()
             try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -48,6 +50,9 @@ enum SelfCheck {
             userAgent: \((try? await model.page.js("return navigator.userAgent;")) as? String ?? "")
             """
             try? state.write(to: out.appendingPathComponent("state.txt"), atomically: true, encoding: .utf8)
+            try? text.write(to: out.appendingPathComponent("main-text.txt"), atomically: true, encoding: .utf8)
+            let html = (try? await model.page.js("var m = document.querySelector('main') || document.body; return m ? m.outerHTML : '';")) as? String ?? ""
+            try? html.write(to: out.appendingPathComponent("main.html"), atomically: true, encoding: .utf8)
             NSApp.terminate(nil)
         }
     }

@@ -158,6 +158,27 @@ final class ParserTests: XCTestCase {
         XCTAssertTrue(parseOrderDetail("nothing useful here\nat all").isEmpty)
     }
 
+    /// WebKit runs LEGO's hidden "Price" label into the amount; prices must still be read.
+    func testWebKitGluedPriceLines() {
+        let webkit = "Holiday Set\nItem: 11111\nQuantity: 1\nPrice$119.99\nFree Promo\nItem: 40000\nQuantity: 1\nPrice-\n"
+            + "Bag Tag\nItem: 5008114\nQuantity: 2\nPrice$9.99\nproduct.salePrice$4.99\n"
+            + "Insiders Set\nItem: 21330\nQuantity: 1\nPrice$69.99$48.99LEGO® Insiders Price\nSupport\n"
+        let chromium = webkit.replacingOccurrences(of: "Price$", with: "Price\n$")
+            .replacingOccurrences(of: "Price-", with: "Price\n-")
+            .replacingOccurrences(of: "product.salePrice$", with: "product.salePrice\n$")
+            .replacingOccurrences(of: "$69.99$48.99LEGO", with: "$69.99\n$48.99\nLEGO")
+        let w = parseOrderDetail(webkit)
+        XCTAssertEqual(w, parseOrderDetail(chromium))
+        XCTAssertEqual(w.count, 4)
+        XCTAssertEqual(w[0].salePrice, "119.99"); XCTAssertFalse(w[0].isFreeGift)
+        XCTAssertTrue(w[1].isFreeGift)
+        XCTAssertEqual(w[2].regularPrice, "9.99"); XCTAssertEqual(w[2].salePrice, "4.99")
+        XCTAssertEqual(w[3].regularPrice, "69.99"); XCTAssertEqual(w[3].salePrice, "48.99")
+        for keep in ["-$15.00", "Price", "$9.99", "Prices may vary", "Price match", "Price$", "Pricey$5.00"] {
+            XCTAssertEqual(splitGluedPriceLine(keep), [keep], keep)
+        }
+    }
+
     func testOrderSummary() {
         let two = parseOrderSummary("Items...\nOrder summary\nSubtotal\n$754.96\nDelivery\n$0.00\nTax\n$54.08\nLEGO® Insiders discount\n-$9.00\nTotal\n$800.04\n")
         XCTAssertEqual(two.keys, ["subtotal", "delivery", "tax", "insiders_discount", "total"])

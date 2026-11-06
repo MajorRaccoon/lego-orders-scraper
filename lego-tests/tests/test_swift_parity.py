@@ -53,6 +53,10 @@ LEGO\u00ae Insiders discount\n-$9.00\nTotal\n$800.04\n""",
     "Order summary\nSubtotal $10.00\nShipping $4.99\nTax $0.80\nDiscount -$2.00\nTotal $13.79\n",
     "Order summary\nSubtotal $100.00\nLEGO\u00ae Insiders discount -$10.00\nDiscount -$5.00\nTotal $85.00\nTotal $1.00\n",
     "Order summary\nSubtotal\nTotal\n$5.00\n", "Order summary\nSubtotal $1.00\n", "no summary block", "",
+    # WebKit (Safari engine) runs the hidden "Price" label into the amount:
+    "Set A\nItem: 1\nQuantity: 1\nPrice$119.99\nFree\nItem: 2\nQuantity: 1\nPrice-\nTag\nItem: 3\nQuantity: 2\n"
+    "Price$9.99\nproduct.salePrice$4.99\nIns\nItem: 4\nQuantity: 1\nPrice$69.99$48.99LEGO® Insiders Price\n"
+    "Gift\nQuantity: 1\nPrice $25.00\nOdd\nItem: 5\nQuantity: 1\nPricey$5.00\n-$15.00\nPrice$\nPrice match\n",
 ]
 
 for text in LISTS:
