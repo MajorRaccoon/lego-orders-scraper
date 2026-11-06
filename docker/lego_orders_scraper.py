@@ -147,7 +147,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "34"  # bump by 1 with every change to this script
+__version__ = "35"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -693,6 +693,10 @@ class LegoOrder:
     items: List[LegoOrderLine] = field(default_factory=list)
     summary: Dict[str, str] = field(default_factory=dict)
     fetch_error: Optional[str] = None
+    # Not saved to disk. Set by merge_with_existing() when a saved order's
+    # status changed since it was fetched (e.g. "In Process" -> "Shipped"), so
+    # scrape() re-reads its detail page to pick up new item statuses/tracking.
+    refresh: bool = field(default=False, compare=False, repr=False)
 
     def to_dict(self):
         d = {
@@ -1175,6 +1179,18 @@ def merge_with_existing(fresh_orders, existing_by_number):
         num = order.order_number
         if num in merged:
             existing_order = merged[num]
+            # A saved order whose status changed since it was fetched (or whose
+            # last refresh didn't finish) gets its detail page read again --
+            # e.g. "Pre-order" items that have since shipped.
+            if existing_order.items and order.status != existing_order.status:
+                print(
+                    f"  note: {num}: status changed from {existing_order.status!r} "
+                    f"to {order.status!r} -- refetching its item detail"
+                )
+                existing_order.refresh = True
+            elif existing_order.items and existing_order.fetch_error:
+                print(f"  note: {num}: last refresh didn't finish -- refetching its item detail")
+                existing_order.refresh = True
             existing_order.status = order.status
             existing_order.order_date = order.order_date
             existing_order.total = order.total
@@ -1383,10 +1399,20 @@ def scrape(
             orders = merge_with_existing(orders, existing_by_number)
             orders = dedupe_orders(orders)
 
-            already_saved_count = sum(1 for o in orders if o.items)
+            # Orders to refresh keep their saved items until the new fetch
+            # succeeds. Mark them on disk too, so a run that's stopped before
+            # reaching them still refreshes them next time.
+            for o in orders:
+                if o.refresh:
+                    if _before_since_date(o, since_date):
+                        o.refresh = False  # older than the cutoff: not refetched
+                    else:
+                        o.fetch_error = "status changed; item detail not refreshed yet"
+
+            already_saved_count = sum(1 for o in orders if o.items and not o.refresh)
             to_fetch = [
                 o for o in orders
-                if not o.items and not _before_since_date(o, since_date)
+                if (not o.items or o.refresh) and not _before_since_date(o, since_date)
             ]
             skipped_by_date_count = len(orders) - already_saved_count - len(to_fetch)
             summary = (
@@ -1401,7 +1427,7 @@ def scrape(
             for idx, order in enumerate(orders, 1):
                 if _interrupt.count > 0:
                     break  # Ctrl+C -- stop between orders rather than mid-request
-                if order.items:
+                if order.items and not order.refresh:
                     print(f"  [{idx}/{len(orders)}] {order.order_number} (already saved, skipping)")
                     continue
                 if _before_since_date(order, since_date):
@@ -1410,7 +1436,10 @@ def scrape(
                         f"(placed {order.order_date}, before --since-date, skipping)"
                     )
                     continue
-                print(f"  [{idx}/{len(orders)}] {order.order_number}")
+                print(
+                    f"  [{idx}/{len(orders)}] {order.order_number}"
+                    + (" (status changed, refreshing)" if order.refresh else "")
+                )
                 try:
                     page.goto(order.url, wait_until="domcontentloaded", timeout=20000)
                     dismiss_interstitials(page)
@@ -1438,17 +1467,26 @@ def scrape(
                         )
                     page.wait_for_timeout(int(delay * 1000))
                     detail_text = page.locator("main").inner_text()
-                    order.items = parse_order_detail(detail_text)
+                    new_items = parse_order_detail(detail_text)
+                    if order.refresh and not new_items:
+                        raise RuntimeError("no items found on the order page")
+                    order.items = new_items
                     order.summary = _parse_order_summary(detail_text)
                     _reconcile_total(order)
                     order.fetch_error = None
                 except Exception as e:
                     # One slow/broken order shouldn't take the whole run down
-                    # -- log it, leave it for a future run (items stays
-                    # empty, so it'll be retried), and keep going.
-                    print(f"      failed to fetch this order, skipping it: {e}")
-                    order.items = []
+                    # -- log it, leave it for a future run, and keep going. A
+                    # new order's items stay empty (so it's retried); an order
+                    # being refreshed keeps the items saved earlier, and its
+                    # fetch_error makes the next run try the refresh again.
+                    if order.refresh:
+                        print(f"      couldn't refresh this order, keeping its saved detail: {e}")
+                    else:
+                        print(f"      failed to fetch this order, skipping it: {e}")
+                        order.items = []
                     order.fetch_error = str(e)
+                order.refresh = False
                 write_outputs(orders, json_path, csv_path, quiet=True,
                               include_tracking=include_tracking)
                 time.sleep(delay)

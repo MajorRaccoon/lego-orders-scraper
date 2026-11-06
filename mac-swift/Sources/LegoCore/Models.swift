@@ -1,7 +1,7 @@
 import Foundation
 
 /// Version of the Swift port. Bump by 1 with every change to LegoCore or the app.
-public let legoSwiftVersion = "5"
+public let legoSwiftVersion = "6"
 
 public let baseURL = "https://www.lego.com"
 public let ordersURL = "\(baseURL)/en-us/member/orders"
@@ -118,6 +118,9 @@ public struct LegoOrder: Equatable {
     public var items: [LegoOrderLine] = []
     public var summary = OrderedStrings()
     public var fetchError: String?
+    /// Not saved to disk: set by mergeWithExisting when a saved order's status changed, so the run
+    /// re-reads its detail page (e.g. "Pre-order" items that have since shipped).
+    public var refresh = false
 
     public init(orderNumber: String, status: String?, orderDate: String?, total: String?, itemCountListed: Int?,
                 url: String?, items: [LegoOrderLine] = [], summary: OrderedStrings = OrderedStrings(), fetchError: String? = nil) {

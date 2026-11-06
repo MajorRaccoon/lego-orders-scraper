@@ -165,8 +165,18 @@ public final class Scraper {
             orders = mergeWithExisting(orders, existing, log: log)
             orders = dedupeOrders(orders, log: log)
 
-            let alreadySaved = orders.filter { !$0.items.isEmpty }.count
-            let toFetch = orders.filter { $0.items.isEmpty && !isBeforeSinceDate($0, o.sinceDate) }.count
+            // Orders to refresh keep their saved items until the new fetch succeeds; the marker
+            // makes a run that's stopped before reaching them refresh them next time.
+            for i in orders.indices where orders[i].refresh {
+                if isBeforeSinceDate(orders[i], o.sinceDate) {
+                    orders[i].refresh = false  // older than the cutoff: not refetched
+                } else {
+                    orders[i].fetchError = "status changed; item detail not refreshed yet"
+                }
+            }
+
+            let alreadySaved = orders.filter { !$0.items.isEmpty && !$0.refresh }.count
+            let toFetch = orders.filter { ($0.items.isEmpty || $0.refresh) && !isBeforeSinceDate($0, o.sinceDate) }.count
             var summary = "Found \(orders.count) order(s) total (\(alreadySaved) already saved"
             if o.sinceDate != nil { summary += ", \(orders.count - alreadySaved - toFetch) before the since date" }
             summary += ", \(toFetch) to fetch).\n"
@@ -175,7 +185,7 @@ public final class Scraper {
             for idx in orders.indices {
                 if stop.requested { break }
                 let tag = "  [\(idx + 1)/\(orders.count)] \(orders[idx].orderNumber)"
-                if !orders[idx].items.isEmpty {
+                if !orders[idx].items.isEmpty && !orders[idx].refresh {
                     log("\(tag) (already saved, skipping)")
                     continue
                 }
@@ -183,17 +193,23 @@ public final class Scraper {
                     log("\(tag) (placed \(orders[idx].orderDate ?? "?"), before the since date, skipping)")
                     continue
                 }
-                log(tag)
+                log(tag + (orders[idx].refresh ? " (status changed, refreshing)" : ""))
                 do {
                     try await fetchDetail(&orders[idx], delay: o.delay)
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
-                    // One broken order shouldn't stop the run; it's retried next time.
-                    log("      failed to fetch this order, skipping it: \(error)")
-                    orders[idx].items = []
+                    // One broken order shouldn't stop the run. A new order's items stay empty (so it's
+                    // retried); a refreshed order keeps its saved items, and fetchError retries it next run.
+                    if orders[idx].refresh {
+                        log("      couldn't refresh this order, keeping its saved detail: \(error)")
+                    } else {
+                        log("      failed to fetch this order, skipping it: \(error)")
+                        orders[idx].items = []
+                    }
                     orders[idx].fetchError = "\(error)"
                 }
+                orders[idx].refresh = false
                 try writeOutputs(orders, json: o.jsonURL, csv: o.csvURL, quiet: true,
                                  includeTracking: o.includeTracking, log: log)
                 try await page.sleep(o.delay)
@@ -229,7 +245,9 @@ public final class Scraper {
         }
         try await page.sleep(delay)
         let text = try await page.mainText()
-        order.items = parseOrderDetail(text)
+        let newItems = parseOrderDetail(text)
+        if order.refresh && newItems.isEmpty { throw ScraperError("no items found on the order page") }
+        order.items = newItems
         order.summary = parseOrderSummary(text)
         reconcileTotal(&order, log: log)
         order.fetchError = nil

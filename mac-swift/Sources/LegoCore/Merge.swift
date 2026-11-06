@@ -28,6 +28,15 @@ public func mergeWithExisting(_ fresh: [LegoOrder], _ existing: [(String, LegoOr
     for order in fresh {
         let num = order.orderNumber
         if var e = merged[num] {
+            // A saved order whose status changed since it was fetched (or whose last refresh
+            // didn't finish) gets its detail page read again.
+            if !e.items.isEmpty && order.status != e.status {
+                log("  note: \(num): status changed from \(pyRepr(e.status)) to \(pyRepr(order.status)) -- refetching its item detail")
+                e.refresh = true
+            } else if !e.items.isEmpty && e.fetchError != nil {
+                log("  note: \(num): last refresh didn't finish -- refetching its item detail")
+                e.refresh = true
+            }
             e.status = order.status
             e.orderDate = order.orderDate
             e.total = order.total

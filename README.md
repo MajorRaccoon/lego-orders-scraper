@@ -81,6 +81,8 @@ python3 lego_orders_scraper.py --version
 
 The JSON and CSV files are saved after **every** order. If you press Ctrl+C or the run stops, run the same command again: it skips orders it already has and fetches only what's missing. A single order that fails to load is skipped and retried next run.
 
+If a saved order's status changes on LEGO's My Orders list (for example **In Process** → **Shipped**), the next run re-reads that order's detail page, so item statuses and tracking numbers stay current. Its saved details are kept if that re-read fails, and it's retried next run. Orders older than the since date aren't re-read, but their status is still updated.
+
 ### Reusing your Chrome login (`--cookie-source`)
 
 If you're already signed in to LEGO.com in Chrome, the tool can copy that session instead of asking you to log in:

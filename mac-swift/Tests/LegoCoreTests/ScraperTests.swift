@@ -183,6 +183,56 @@ final class ScraperTests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: o.csvURL).contains(",1Z\r\n"))
     }
 
+    /// A saved order whose status changed is re-read; a failed refresh keeps its items; a stopped run
+    /// still refreshes it next time; orders before the since date aren't refetched.
+    func testStatusChangeRefresh() async throws {
+        func site(_ t100Status: String, _ t100Detail: String) -> FakePage {
+            let p = FakePage(batches: ["In Process\nOrder Number: T100\nOrder Date: October 6, 2026\nTotal: $10.00\n1 item in this order\n"
+                .replacingOccurrences(of: "In Process", with: t100Status)
+                + block("200", "June 1, 2026")])
+            p.details = [orderDetailURL("T100"): t100Detail,
+                         orderDetailURL("T200"): "Shipped\nTracking number: 1ZOLD\nTrain\nItem: 2\nQuantity: 1\nPrice$5.00\n"]
+            return p
+        }
+        let preorder = "Pre-order\nDepot\nItem: 910072\nQuantity: 1\nPrice$99.99\n"
+        let shipped = "Shipped\nTracking number: 1ZNEW\nDepot\nItem: 910072\nQuantity: 1\nPrice$99.99\n"
+        var o = options(); o.sinceDate = nil
+
+        _ = try await scraper(site("In Process", preorder)).run(o)
+        XCTAssertEqual(try loadOrders(o.jsonURL)[0].items[0].status, "Pre-order")
+
+        let s2 = site("Shipped", shipped)
+        let r2 = try await scraper(s2).run(o)
+        XCTAssertEqual(s2.visited, [ordersURL, orderDetailURL("T100")])                    // only the changed order
+        XCTAssertEqual(r2[0].items[0].status, "Shipped"); XCTAssertEqual(r2[0].items[0].trackingNumber, "1ZNEW")
+        XCTAssertNil(r2[0].fetchError)
+
+        let s3 = site("Complete", shipped); s3.failingURLs = [orderDetailURL("T100")]
+        let r3 = try await scraper(s3).run(o)
+        XCTAssertEqual(r3[0].items[0].trackingNumber, "1ZNEW")                             // saved items kept
+        XCTAssertEqual(r3[0].status, "Complete"); XCTAssertNotNil(r3[0].fetchError)
+
+        let s4 = site("Complete", shipped.replacingOccurrences(of: "Shipped", with: "Delivered"))
+        let r4 = try await scraper(s4).run(o)
+        XCTAssertEqual(r4[0].items[0].status, "Delivered"); XCTAssertNil(r4[0].fetchError)  // retried, succeeded
+
+        // Stopped before reaching the changed order: it's still refreshed on the next run.
+        let s5 = site("Returned", shipped)
+        let stop = StopFlag(); stop.request()
+        _ = try await Scraper(page: s5, stop: stop, log: { _ in }, waitForLogin: {}).run(o)
+        XCTAssertNotNil(try loadOrders(o.jsonURL)[0].fetchError)
+        let s6 = site("Returned", shipped)
+        _ = try await scraper(s6).run(o)
+        XCTAssertTrue(s6.visited.contains(orderDetailURL("T100")))
+
+        // Before the since date: status updates, not refetched.
+        var old = o; old.sinceDate = SimpleDate(year: 2026, month: 11, day: 1)
+        let s7 = site("Canceled", shipped)
+        let r7 = try await scraper(s7).run(old)
+        XCTAssertEqual(s7.visited, [ordersURL]); XCTAssertEqual(r7[0].status, "Canceled")
+        XCTAssertEqual(r7[0].items[0].status, "Shipped")
+    }
+
     func testFailedOrderIsRecordedAndRetried() async throws {
         let site = makeSite()
         site.failingURLs = [orderDetailURL("T100")]
