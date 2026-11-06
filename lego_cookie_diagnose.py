@@ -9,7 +9,7 @@ this script only ever prints lengths/counts/booleans, never the value).
 
 USAGE
 -----
-    python lego_cookie_diagnose.py "/Users/dciccaro/Library/Application Support/Google/Chrome/Default"
+    python lego_cookie_diagnose.py "$HOME/Library/Application Support/Google/Chrome/Default"
 
 It walks through, stopping at (and clearly reporting) the first failure:
   1. Can we find a 'Cookies' file under the given path?
