@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lego_orders_scraper import (  # reuse the same data model/rendering/atomic-write logic
     LegoOrder,
     write_html_report,
+    resolve_output_path,
     __version__,
 )
 
@@ -60,7 +61,9 @@ def main():
     parser.add_argument("--no-tracking", action="store_true",
                         help="Leave tracking numbers out of the report.")
     args = parser.parse_args()
-    convert(args.json, args.html, include_tracking=not args.no_tracking)
+    # Relative paths (including the defaults) are in the data folder, same as the scraper's.
+    convert(resolve_output_path(args.json), resolve_output_path(args.html),
+            include_tracking=not args.no_tracking)
 
 
 if __name__ == "__main__":

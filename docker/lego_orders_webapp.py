@@ -66,16 +66,27 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
 
-__version__ = "9"  # this webapp's own version, independent of lego_orders_scraper.py's
+__version__ = "10"  # this webapp's own version, independent of lego_orders_scraper.py's
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRAPER_PATH = SCRIPT_DIR / "lego_orders_scraper.py"
 
-# Where the scraper runs (so where relative --output/--csv/--html paths land
-# and where the download links look). Defaults to this script's own folder,
-# exactly as before; the Docker image sets LEGO_WORK_DIR=/data so results
-# live on a mounted volume instead of inside the (disposable) container.
-WORK_DIR = Path(os.environ.get("LEGO_WORK_DIR") or SCRIPT_DIR).resolve()
+def _default_work_dir():
+    """Same data folder rule as lego_orders_scraper.data_dir(): LEGO_WORK_DIR if
+    set (Docker: /data; the Python Mac app sets it too), else on macOS
+    ~/Library/Application Support/LEGO Order Scraper, else this script's folder."""
+    env = os.environ.get("LEGO_WORK_DIR")
+    if env:
+        return Path(env).expanduser()
+    if platform.system() == "Darwin":
+        return Path.home() / "Library" / "Application Support" / "LEGO Order Scraper"
+    return SCRIPT_DIR
+
+
+# Where output files go (relative --output/--csv/--html paths land here, and the
+# download links look here). Passed to each scrape as LEGO_WORK_DIR so the
+# scraper uses exactly the same folder.
+WORK_DIR = _default_work_dir().resolve()
 
 # Docker only: the port the in-container browser view (noVNC) is served on,
 # so the page can link to it. Unset everywhere else -> no link shown.
@@ -194,6 +205,16 @@ def build_argv(config):
     return argv
 
 
+def scraper_env():
+    """Environment for a scrape: same data folder as this web UI. Under the
+    Python Mac app this process's output already IS the log file (every scrape
+    line is mirrored to it), so the scrape mustn't write to the log as well."""
+    env = dict(os.environ, LEGO_WORK_DIR=str(WORK_DIR))
+    if APP_MODE:
+        env["LEGO_LOG_FILE"] = ""
+    return env
+
+
 def scraper_command(argv):
     """The command that runs lego_orders_scraper.py with `argv`. Normally that's
     the current Python running the script. Inside the frozen macOS app,
@@ -243,6 +264,7 @@ class ScrapeJob:
             self.stop_requested = False
 
         cmd = scraper_command(argv)
+        WORK_DIR.mkdir(parents=True, exist_ok=True)
         popen_kwargs = dict(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -252,6 +274,7 @@ class ScrapeJob:
             errors="replace",
             bufsize=1,
             cwd=str(WORK_DIR),
+            env=scraper_env(),
         )
         if platform.system() == "Windows":
             # Needed so a later Stop can send CTRL_BREAK_EVENT to just this
@@ -915,10 +938,12 @@ def main():
     args = parser.parse_args()
 
     url = f"http://{args.host}:{args.port}/"
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
     global SERVE_URL
     SERVE_URL = url
     print(f"lego_orders_webapp.py v{__version__}")
     print(f"Serving at {url} (Ctrl+C to stop)")
+    print(f"Output folder: {WORK_DIR}")
 
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()

@@ -50,7 +50,9 @@ python3 lego_orders_scraper.py
 2. Log in by hand in that window, then go to **My Orders**.
 3. Return to the terminal and press **Enter**.
 
-Your login is saved in `./lego_browser_profile/`, so later runs skip the login (until LEGO expires the session).
+Your login is saved in a `lego_browser_profile/` folder next to the scraper script, so later runs skip the login (until LEGO expires the session).
+
+**Where files go:** on a Mac, the output files are saved in `~/Library/Application Support/LEGO Order Scraper/`, the same folder the Mac app uses, so every version shares and resumes the same data. Each run is also recorded in `~/Library/Logs/LEGO Order Scraper.log`. The start of each run prints both locations. On other systems, files go in the current folder and there's no log file. A relative `--output`, `--csv` or `--html` path is saved inside the data folder; give a full path (for example `~/Desktop/orders.json`) to save somewhere else.
 
 ### Common examples
 
@@ -121,7 +123,7 @@ python3 lego_orders_webapp.py --no-browser     # don't auto-open a browser tab
 - The **HTML report path** box starts as `lego_orders.html`. Clear it to skip the report.
 - The **Leave out tracking numbers** checkbox is the same as `--no-tracking`.
 - **Stop** asks the scraper to finish gracefully. Clicking it a second time stops it immediately.
-- Result files appear as download links when the run finishes.
+- Result files appear as download links when the run finishes. They're saved in `~/Library/Application Support/LEGO Order Scraper/` on a Mac, the same folder as the command line and Mac app, and each run is recorded in `~/Library/Logs/LEGO Order Scraper.log`.
 - The web page keeps running after a scrape finishes, so you can start another one, and Terminal doesn't return to its prompt. When a scrape ends, Terminal shows a reminder. Press **Ctrl+C** in Terminal to quit.
 - It listens only on `127.0.0.1` (your machine). It has no password, so don't expose it to a network.
 
@@ -215,6 +217,8 @@ More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README
 
 ## Output files
 
+On a Mac, every version saves these in `~/Library/Application Support/LEGO Order Scraper/` and records runs in `~/Library/Logs/LEGO Order Scraper.log`. Docker uses its `lego-data` volume.
+
 | File | Contents |
 |---|---|
 | `lego_orders.json` | One object per order, with a nested `items` list. |
@@ -260,7 +264,8 @@ None of these are needed for normal use. They're for customizing a setup or for 
 
 | Variable | Applies to | Used for |
 |---|---|---|
-| `LEGO_WORK_DIR` | Web UI, Docker (the image sets it to `/data`), older Python Mac app | Folder where the web UI saves output files and finds them for download |
+| `LEGO_WORK_DIR` | Command line, Web UI, Docker (the image sets it to `/data`), older Python Mac app | Data folder for output files (default on a Mac: `~/Library/Application Support/LEGO Order Scraper`; elsewhere: the current folder) |
+| `LEGO_LOG_FILE` | Command line, Web UI | Log file each run is recorded in (default on a Mac: `~/Library/Logs/LEGO Order Scraper.log`; elsewhere: none). Set it to an empty value to turn the log off. |
 | `LEGO_PROFILE_DIR` | Command line, Web UI, older Python Mac app | Folder for the saved Chromium login (default: `lego_browser_profile` next to the scraper). Docker doesn't use it; it keeps the login in its data volume. |
 | `PLAYWRIGHT_BROWSERS_PATH` | Command line, Web UI, older Python Mac app | Where Playwright's Chromium is installed (a Playwright setting). Docker's image already sets it. |
 | `LEGO_WEB_PORT` | Docker | Web UI port on your machine (default `8765`). Set it when running `docker compose up`. |

@@ -24,8 +24,11 @@ assert r["cfg"] == {"novnc_port": "6080", "work_dir": os.path.realpath(work), "a
 print("env vars set -> WORK_DIR and noVNC port honored by /config: OK")
 
 r = run({})
-assert r["cfg"]["novnc_port"] is None and r["work"] == os.path.realpath(SRC), r
-print("env vars unset -> defaults unchanged (script folder, no noVNC link): OK")
+import platform
+expected = (os.path.expanduser("~/Library/Application Support/LEGO Order Scraper")
+            if platform.system() == "Darwin" else SRC)
+assert r["cfg"]["novnc_port"] is None and r["work"] == os.path.realpath(expected), r
+print("env vars unset -> Mac: ~/Library/Application Support/LEGO Order Scraper (elsewhere: script folder), no noVNC link: OK")
 
 h = subprocess.run([sys.executable, SRC + "/lego_orders_webapp.py", "--help"], capture_output=True, text=True)
 assert "--host" in h.stdout and "127.0.0.1" in h.stdout and "8765" in h.stdout, h.stdout

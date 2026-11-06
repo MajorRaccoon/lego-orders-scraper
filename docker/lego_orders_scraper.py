@@ -81,6 +81,12 @@ anything from LEGO.com again, use the separate script instead:
 
 OUTPUT & RESUMING
 -----------------
+Files are saved in the data folder: on a Mac ~/Library/Application Support/
+LEGO Order Scraper/ (the same folder the Mac apps use), or LEGO_WORK_DIR if
+set; elsewhere the current folder. Relative --output/--csv/--html paths go
+there too. Each run is also recorded in ~/Library/Logs/LEGO Order Scraper.log
+on a Mac (LEGO_LOG_FILE to change it; blank = no log).
+
 A JSON file (default lego_orders.json) — one object per order, each with a
 nested "items" list — and a flat CSV (default lego_orders.csv) with one
 row per item, handy for opening in Excel/Sheets. Each item has an "is_piece"
@@ -147,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "36"  # bump by 1 with every change to this script
+__version__ = "37"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -162,6 +168,83 @@ DEFAULT_HTML_PATH = "lego_orders.html"
 # _rename_old_csv) so it isn't left behind, stale, after the switch.
 DEFAULT_CSV_PATH = "lego_orders.csv"
 OLD_DEFAULT_CSV_NAME = "lego_order_items.csv"
+
+APP_NAME = "LEGO Order Scraper"
+
+
+def data_dir():
+    """The folder output files go in (and relative --output/--csv/--html paths
+    are resolved against). Same folder for every version on a Mac:
+      - LEGO_WORK_DIR, if set (Docker sets it to /data; the Python Mac app sets it too)
+      - on macOS: ~/Library/Application Support/LEGO Order Scraper
+      - anywhere else: the current folder"""
+    env = os.environ.get("LEGO_WORK_DIR")
+    if env:
+        return Path(env).expanduser()
+    if platform.system() == "Darwin":
+        return Path.home() / "Library" / "Application Support" / APP_NAME
+    return Path.cwd()
+
+
+def log_file_path():
+    """Where each run's output is also recorded: LEGO_LOG_FILE if set (blank =
+    no log file), else on macOS ~/Library/Logs/LEGO Order Scraper.log (the
+    same log the Mac apps use), else no log file."""
+    env = os.environ.get("LEGO_LOG_FILE")
+    if env is not None:
+        return Path(env).expanduser() if env.strip() else None
+    if platform.system() == "Darwin":
+        return Path.home() / "Library" / "Logs" / f"{APP_NAME}.log"
+    return None
+
+
+def resolve_output_path(path):
+    """An absolute path (or ~/...) is used as given; a relative one goes in data_dir()."""
+    p = Path(path).expanduser()
+    return p if p.is_absolute() else data_dir() / p
+
+
+class _Tee:
+    """Writes to the terminal (or the web UI's pipe) and to the log file at once.
+    Flushes on every write so prompts without a newline show up immediately."""
+
+    def __init__(self, stream, log):
+        self.stream, self.log = stream, log
+
+    def write(self, text):
+        self.stream.write(text)
+        self.stream.flush()
+        try:
+            self.log.write(text)
+            self.log.flush()
+        except (OSError, ValueError):
+            pass  # a log problem must never stop a scrape
+        return len(text)
+
+    def flush(self):
+        self.stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
+def _start_log():
+    """Record everything this run prints in the log file too (appended, with a
+    header line). Returns the log path, or None when there's no log file."""
+    path = log_file_path()
+    if path is None:
+        return None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        log = open(path, "a", encoding="utf-8")
+    except OSError as e:
+        print(f"(couldn't open the log file {path}: {e})")
+        return None
+    log.write(f"\n===== {datetime.datetime.now().isoformat(timespec='seconds')} "
+              f"lego_orders_scraper.py v{__version__} =====\n")
+    sys.stdout = _Tee(sys.stdout, log)
+    sys.stderr = _Tee(sys.stderr, log)
+    return path
 
 BASE = "https://www.lego.com"
 ORDERS_URL = f"{BASE}/en-us/member/orders"
@@ -2178,11 +2261,15 @@ def main():
         "the next batch was just slow to render.",
     )
     parser.add_argument(
-        "--output", default="lego_orders.json", help="Output JSON file path."
+        "--output", default="lego_orders.json",
+        help="Output JSON file (default: lego_orders.json). A relative path goes in "
+        "the data folder: ~/Library/Application Support/LEGO Order Scraper on a Mac "
+        "(or LEGO_WORK_DIR if set); the current folder elsewhere."
     )
     parser.add_argument(
         "--csv", default=DEFAULT_CSV_PATH,
-        help="Output CSV file path (one row per item).",
+        help="Output CSV file, one row per item (default: lego_orders.csv, in the "
+        "data folder like --output).",
     )
     parser.add_argument(
         "--cookie-source", default=None,
@@ -2240,7 +2327,20 @@ def main():
     )
     args = parser.parse_args()
 
+    # Output files go in the data folder (relative paths are resolved there).
+    args.output = str(resolve_output_path(args.output))
+    args.csv = str(resolve_output_path(args.csv))
+    if args.html:
+        args.html = str(resolve_output_path(args.html))
+    log_path = _start_log()
+
     print(f"lego_orders_scraper.py v{__version__}")
+    for f in (args.output, args.csv, args.html):
+        if f:
+            Path(f).parent.mkdir(parents=True, exist_ok=True)
+    print(f"Output folder: {Path(args.output).parent}")
+    if log_path:
+        print(f"Log file: {log_path}")
     if args.since_date is None:
         print("Since date: none (fetching all orders)")
     else:

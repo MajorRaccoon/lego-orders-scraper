@@ -48,6 +48,7 @@ from lego_orders_scraper import (  # reuse the same data model/atomic-write/dedu
     LegoOrderLine,
     _atomic_write,
     dedupe_orders,
+    resolve_output_path,
 )
 
 
@@ -145,7 +146,8 @@ def main():
     parser.add_argument("--json", default="lego_orders.json", help="Path to the JSON file to repair (in place).")
     parser.add_argument("--csv", default="lego_orders.csv", help="Path to the CSV file to repair from.")
     args = parser.parse_args()
-    repair(args.json, args.csv)
+    # Relative paths (including the defaults) are in the data folder, same as the scraper's.
+    repair(resolve_output_path(args.json), resolve_output_path(args.csv))
 
 
 if __name__ == "__main__":

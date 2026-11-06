@@ -20,6 +20,11 @@ import sys
 import time
 from pathlib import Path
 
+# Keep this test away from the real data folder and log file.
+import os as _os2, tempfile as _tf
+_sandbox = _tf.mkdtemp(prefix="lego_sandbox_")
+_os2.environ["LEGO_WORK_DIR"] = _os2.path.join(_sandbox, "data")
+_os2.environ["LEGO_LOG_FILE"] = _os2.path.join(_sandbox, "test.log")
 sys.path.insert(0, SRC)
 import lego_orders_webapp as webapp
 
