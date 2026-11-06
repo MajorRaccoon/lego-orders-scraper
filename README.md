@@ -253,19 +253,22 @@ Prices: each item has `regular_price` and `sale_price`. They're equal when the i
 
 ### Environment variables
 
-| Variable | Used for |
-|---|---|
-| `LEGO_WORK_DIR` | Folder for output files (web UI / older Python Mac app) |
-| `LEGO_PROFILE_DIR` | Chromium profile (saved login) folder |
-| `PLAYWRIGHT_BROWSERS_PATH` | Where Playwright's Chromium is installed |
-| `LEGO_WEB_PORT` | Docker: web UI port on your machine (default 8765) |
-| `LEGO_TZ` | Docker: browser timezone (default America/New_York) |
-| `LEGO_NOVNC_PORT` | Port shown for the noVNC login view |
-| `LEGO_APP_MODE` | Older Python Mac app (`mac-app/`): `window` or `browser` |
-| `LEGO_APP_DATA_DIR` | Older Python Mac app: data folder |
-| `LEGO_SKIP_BROWSER_INSTALL` | Older Python Mac app: skip the first-run Chromium download |
-| `LEGO_SELFCHECK` | Swift Mac app: self-check mode (see [`mac-swift/README-swift.md`](mac-swift/README-swift.md)) |
-| `LEGO_SELFCHECK_URL` | Swift Mac app: page the self-check loads (default: My Orders) |
+None of these are needed for normal use. They're for customizing a setup or for development.
+
+| Variable | Applies to | Used for |
+|---|---|---|
+| `LEGO_WORK_DIR` | Web UI, Docker (the image sets it to `/data`), older Python Mac app | Folder where the web UI saves output files and finds them for download |
+| `LEGO_PROFILE_DIR` | Command line, Web UI, older Python Mac app | Folder for the saved Chromium login (default: `lego_browser_profile` next to the scraper). Docker doesn't use it; it keeps the login in its data volume. |
+| `PLAYWRIGHT_BROWSERS_PATH` | Command line, Web UI, older Python Mac app | Where Playwright's Chromium is installed (a Playwright setting). Docker's image already sets it. |
+| `LEGO_WEB_PORT` | Docker | Web UI port on your machine (default `8765`). Set it when running `docker compose up`. |
+| `LEGO_TZ` | Docker | Timezone of the container's browser (default `America/New_York`). Set it when running `docker compose up --build`. |
+| `LEGO_NOVNC_PORT` | Docker (the image sets it) | Port of the noVNC login view that the web UI links to. Outside Docker it's unset, and no link is shown. |
+| `LEGO_APP_MODE` | Older Python Mac app (`mac-app/`) | Set by its launcher: `window` or `browser` |
+| `LEGO_APP_DATA_DIR` | Older Python Mac app | Its data folder |
+| `LEGO_SKIP_BROWSER_INSTALL` | Older Python Mac app | Skip its first-run Chromium download |
+| `LEGO_SELFCHECK` | Mac Swift app | Self-check mode for developers (see [`mac-swift/README-swift.md`](mac-swift/README-swift.md)) |
+| `LEGO_SELFCHECK_URL` | Mac Swift app | Page the self-check loads (default: My Orders) |
+| `LEGO_SRC` | Test suite | Folder holding the scripts to test (default: this repository) |
 
 ---
 
