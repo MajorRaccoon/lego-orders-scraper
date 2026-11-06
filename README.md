@@ -205,7 +205,9 @@ The result is `mac-swift/dist/LEGO Order Scraper.app` (Apple Silicon and Intel).
 - Data: `~/Library/Application Support/LEGO Order Scraper/` (same files and format as the command line, so runs resume across versions)
 - Log: `~/Library/Logs/LEGO Order Scraper.log`
 
-The app isn't notarized. If macOS blocks it, right-click the app, choose **Open**, then **Open** again.
+**Sharing it:** the `.app` is all anyone needs. Send the zip, `mac-swift/dist/LEGO-Order-Scraper-native-mac.zip`. It needs macOS 13 or newer, on Apple Silicon or Intel.
+
+**First open:** the app isn't notarized by Apple, so macOS blocks it the first time. Double-click it and click **Done**. Then open **System Settings → Privacy & Security** and click **Open Anyway** next to "LEGO Order Scraper". On macOS 13 and 14, right-click the app → **Open** also works. Full steps: [Giving it to someone else](mac-swift/README-swift.md#giving-it-to-someone-else).
 
 More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README-swift.md). The older Python-based Mac app is still in [`mac-app/`](mac-app/README-mac.md).
 

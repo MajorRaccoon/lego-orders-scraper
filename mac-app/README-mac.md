@@ -30,8 +30,8 @@ Everything lives in `~/Library/Application Support/LEGO Order Scraper/`
 
 The app is **not notarized** (that needs a paid Apple developer account), so a copy that was
 downloaded/AirDropped is blocked once by Gatekeeper. The recipient either:
-- right-click the app → **Open** → **Open**, or
-- System Settings → Privacy & Security → **Open Anyway**, or
+- System Settings → Privacy & Security → **Open Anyway** (after trying to open it once), or
+- right-click the app → **Open** → **Open** (macOS 13 and 14 only; removed in macOS 15), or
 - Terminal: `xattr -dr com.apple.quarantine "/Applications/LEGO Order Scraper.app"`
 
 Each person logs in with their own LEGO account; nothing of yours is inside the app.

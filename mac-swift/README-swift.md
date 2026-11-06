@@ -45,7 +45,28 @@ The app reads the same page text as the Python scraper, but through Safari's eng
 
 ## Giving it to someone else
 
-The app isn't notarized (that needs a paid Apple developer account). The first time, the other person needs to right-click the app, choose **Open**, then **Open** again. Each person logs in with their own LEGO account.
+**The `.app` is all they need.** It contains only the program, its icon and its settings file, and uses only libraries built into macOS. There's no Python and no Chromium, and none of your data or login is inside it.
+
+- **Send the zip**, `mac-swift/dist/LEGO-Order-Scraper-native-mac.zip` (under 1 MB), rather than the bare `.app`. A `.app` is really a folder, and email or cloud drives can break it. AirDrop handles the `.app` fine.
+- **They need** macOS 13 (Ventura) or newer, on any Mac (Apple Silicon or Intel).
+- **Each person logs in** with their own LEGO account. Their orders are saved in their own `~/Library/Application Support/LEGO Order Scraper/`.
+
+### The first time they open it
+
+The app isn't notarized by Apple (that needs a paid Apple developer account), so macOS blocks it the first time:
+
+1. Unzip it and drag **LEGO Order Scraper.app** to Applications.
+2. Double-click it. When macOS says it can't verify the app, click **Done** (don't click Move to Trash).
+3. Open **System Settings → Privacy & Security**, scroll down to **Security**, and click **Open Anyway** next to "LEGO Order Scraper was blocked…".
+4. Confirm with your password or Touch ID, then click **Open Anyway** again.
+
+After that it opens normally. The old shortcut (right-click → **Open**) no longer works on macOS 15 (Sequoia) and later; it still works on macOS 13 and 14.
+
+Or, in Terminal, remove the download "quarantine" flag that macOS uses to block the app:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/LEGO Order Scraper.app"
+```
 
 ## For developers
 
