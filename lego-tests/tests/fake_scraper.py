@@ -27,6 +27,8 @@ def _handler(signum, frame):
 
 
 signal.signal(signal.SIGINT, _handler)
+if hasattr(signal, "SIGBREAK"):  # Windows: the web UI's Stop sends Ctrl+Break
+    signal.signal(signal.SIGBREAK, _handler)
 
 print("fake scraper starting", flush=True)
 print("ARGV:" + " ".join(sys.argv[1:]), flush=True)

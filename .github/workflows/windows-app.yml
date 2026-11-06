@@ -28,8 +28,7 @@ jobs:
       - name: Install build requirements
         run: python -m pip install -r windows-app/requirements-windows.txt
 
-      - name: Run the Python test suite on Windows (informational)
-        continue-on-error: true
+      - name: Run the Python test suite on Windows
         run: python lego-tests/run_tests.py
 
       - name: Make the icon

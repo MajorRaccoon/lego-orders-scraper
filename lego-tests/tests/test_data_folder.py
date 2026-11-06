@@ -35,7 +35,8 @@ print("Mac default: Application Support folder + ~/Library/Logs log; LEGO_WORK_D
 
 with env(LEGO_WORK_DIR=str(sandbox / "d")):
     assert sc.resolve_output_path("lego_orders.json") == sandbox / "d" / "lego_orders.json"
-    assert sc.resolve_output_path("/tmp/x.json") == Path("/tmp/x.json")
+    absolute = Path(tempfile.gettempdir()) / "x.json"     # a full path on any OS (C:\\... on Windows)
+    assert sc.resolve_output_path(str(absolute)) == absolute
     assert sc.resolve_output_path("~/x.json") == HOME / "x.json"
 print("Relative paths go in the data folder; absolute and ~ paths are used as given: OK")
 

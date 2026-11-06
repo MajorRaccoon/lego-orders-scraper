@@ -153,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "38"  # bump by 1 with every change to this script
+__version__ = "39"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -1414,6 +1414,16 @@ class _GracefulInterrupt:
 _interrupt = _GracefulInterrupt()
 
 
+def _install_interrupt_handler():
+    """Ctrl+C (SIGINT) -- and on Windows also Ctrl+Break (SIGBREAK), which is
+    what the web UI's Stop button sends there -- go to _interrupt, so the first
+    one stops gracefully (finish the current step, save) instead of killing
+    the process on the spot."""
+    signal.signal(signal.SIGINT, _interrupt)
+    if hasattr(signal, "SIGBREAK"):  # Windows only
+        signal.signal(signal.SIGBREAK, _interrupt)
+
+
 def scrape(
     max_orders=None,
     headless=False,
@@ -1427,7 +1437,7 @@ def scrape(
     since_date=None,
     include_tracking=True,
 ):
-    signal.signal(signal.SIGINT, _interrupt)
+    _install_interrupt_handler()
     _interrupt.count = 0  # reset in case scrape() is called more than once in this process
     _rename_old_csv(csv_path)
     existing_by_number = {} if fresh else load_existing_orders(json_path)
@@ -1445,7 +1455,7 @@ def scrape(
         # and prints a traceback) -- re-assert ours now that Playwright has
         # finished starting up, so a Ctrl+C anywhere from here on is still
         # handled gracefully instead of reverting to the default behavior.
-        signal.signal(signal.SIGINT, _interrupt)
+        _install_interrupt_handler()
 
         browser = None  # only set (and closed) in the --cookie-source path
 

@@ -91,7 +91,8 @@ try:
             with urllib.request.urlopen(req, timeout=5) as r: return r.status, r.read()
         except urllib.error.HTTPError as e: return e.code, e.read()
     st, body = call("/config"); cfg = json.loads(body)
-    assert st == 200 and cfg["app_mode"] == "window" and os.path.realpath(cfg["work_dir"]) == os.path.realpath(data), cfg  # macOS: /var -> /private/var
+    expected_mode = "browser" if sys.platform == "win32" else "window"   # Windows app: page in the default browser
+    assert st == 200 and cfg["app_mode"] == expected_mode and os.path.realpath(cfg["work_dir"]) == os.path.realpath(data), cfg  # macOS: /var -> /private/var
     assert call("/")[0] == 200 and b"Open data folder" in call("/")[1]
     assert call("/quit", "POST")[0] == 404          # window mode: no Quit route
     if sys.platform != "darwin": assert call("/reveal", "POST")[0] == 404

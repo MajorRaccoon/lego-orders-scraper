@@ -25,10 +25,14 @@ print("env vars set -> WORK_DIR and noVNC port honored by /config: OK")
 
 r = run({})
 import platform
-expected = (os.path.expanduser("~/Library/Application Support/LEGO Order Scraper")
-            if platform.system() == "Darwin" else SRC)
+if platform.system() == "Darwin":
+    expected = os.path.expanduser("~/Library/Application Support/LEGO Order Scraper")
+elif platform.system() == "Windows":
+    expected = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser(r"~\AppData\Local"), "LEGO Order Scraper")
+else:
+    expected = SRC
 assert r["cfg"]["novnc_port"] is None and r["work"] == os.path.realpath(expected), r
-print("env vars unset -> Mac: ~/Library/Application Support/LEGO Order Scraper (elsewhere: script folder), no noVNC link: OK")
+print("env vars unset -> Mac: Application Support folder; Windows: %LOCALAPPDATA%; Linux: script folder; no noVNC link: OK")
 
 h = subprocess.run([sys.executable, SRC + "/lego_orders_webapp.py", "--help"], capture_output=True, text=True)
 assert "--host" in h.stdout and "127.0.0.1" in h.stdout and "8765" in h.stdout, h.stdout
