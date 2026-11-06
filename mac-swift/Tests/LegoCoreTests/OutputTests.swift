@@ -140,6 +140,24 @@ final class OutputTests: XCTestCase {
         XCTAssertFalse(renderOrdersHTML([o("T9", "garbage", "1.00")]).contains("Spending by month"))
     }
 
+    func testYearCharts() {
+        func o(_ n: String, _ d: String, _ t: String?) -> LegoOrder {
+            LegoOrder(orderNumber: n, status: "Shipped", orderDate: d, total: t, itemCountListed: 1, url: "u")
+        }
+        let html = renderOrdersHTML([o("T1", "February 3, 2024", "100.00"), o("T2", "December 31, 2024", "1,200.00"),
+                                     o("T3", "October 6, 2026", "107.23")])
+        let charts = html.components(separatedBy: "<figure class=\"year-chart\">").dropFirst()
+        XCTAssertEqual(charts.count, 3)                                            // 2024, 2025 (empty), 2026
+        XCTAssertTrue(html.range(of: "class=\"monthly-table\"")!.lowerBound < html.range(of: "class=\"year-charts\"")!.lowerBound)
+        XCTAssertTrue(html.range(of: "class=\"year-charts\"")!.lowerBound < html.range(of: "class=\"index-table\"")!.lowerBound)
+        XCTAssertTrue(html.contains("<title>December 2024: $1,200.00</title>"))
+        XCTAssertTrue(html.contains("No spending this year"))
+        XCTAssertEqual(niceScale(0).max, 1); XCTAssertEqual(niceScale(9).step, 5)
+        XCTAssertEqual(niceScale(5049.54).max, 6000); XCTAssertEqual(niceScale(5049.54).step, 2000)
+        XCTAssertEqual(pyCommaInt(1500), "1,500"); XCTAssertEqual(pyCommaInt(0), "0")
+        XCTAssertFalse(renderOrdersHTML([]).contains("<figure"))
+    }
+
     func testJSONWriterMatchesPythonFormat() throws {
         let v = JSONValue.object([("a", .array([])), ("b", .object([])), ("c", .string("é\n\"\u{01}")), ("d", .null), ("e", .array([.int(1), .bool(true)]))])
         XCTAssertEqual(JSONWriter.write(v), "{\n  \"a\": [],\n  \"b\": {},\n  \"c\": \"é\\n\\\"\\u0001\",\n  \"d\": null,\n  \"e\": [\n    1,\n    true\n  ]\n}")

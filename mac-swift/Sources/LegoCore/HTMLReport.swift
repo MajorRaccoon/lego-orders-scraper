@@ -10,11 +10,13 @@ let htmlStyle = """
     color-scheme: light dark;
     --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1f; --muted: #6b6b70;
     --border: #e3e3e0; --accent: #d01012; --accent-soft: #fdeceb;
+    --bar: #2a78d6;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #17171a; --panel: #212125; --text: #ededf0; --muted: #9a9aa2;
       --border: #313136; --accent: #ff5a5c; --accent-soft: #3a1e1f;
+      --bar: #3987e5;
     }
   }
   * { box-sizing: border-box; }
@@ -83,6 +85,18 @@ let htmlStyle = """
   .monthly-table tr.totals td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none;
     background: var(--bg); }
   .monthly-note { color: var(--muted); font-size: 0.8em; margin: 0 0 32px; }
+  .year-charts { display: grid; gap: 12px; margin-bottom: 8px; }
+  .year-chart { margin: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 6px; }
+  .year-chart figcaption { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .year-chart .year { font-weight: 600; }
+  .year-chart .year-total { color: var(--muted); font-size: 0.9em; font-variant-numeric: tabular-nums; }
+  .year-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .year-chart .grid { stroke: var(--border); stroke-width: 1; }
+  .year-chart .tick, .year-chart .month { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .year-chart .peak { fill: var(--text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .year-chart .empty { fill: var(--muted); font-size: 13px; font-style: italic; }
+  .year-chart .bar { fill: var(--bar); }
+  .year-chart .bar:hover { opacity: 0.75; }
 </style>
 
 """
@@ -215,6 +229,111 @@ func renderMonthlySpendingTable(_ orders: [LegoOrder]) -> String {
         + "<div class=\"monthly-wrap\"><table class=\"monthly-table\">"
         + "<thead><tr>\(head)</tr></thead><tbody>\(rows.joined())</tbody></table></div>\n"
         + note
+        + renderMonthlyCharts(amounts, firstSeen: firstSeen, years: years)
+}
+
+// MARK: - Per-year bar charts (port of the Python _render_monthly_charts)
+
+let monthAbbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+private let chW = 920.0, chH = 230.0
+private let chLeft = 64.0, chRight = 8.0, chTop = 22.0, chBottom = 28.0
+private let chBar = 24.0
+
+/// Round axis maximum and tick step (whole dollars, at most 4 intervals; step 1, 2 or 5 x 10^n).
+func niceScale(_ maxValue: Double) -> (max: Int, step: Int) {
+    if maxValue <= 0 { return (1, 1) }
+    let raw = maxValue / 4
+    var mag = 1
+    while Double(mag * 10) <= raw { mag *= 10 }
+    var step = 10 * mag
+    for m in [1, 2, 5] where Double(m * mag) >= raw { step = m * mag; break }
+    return (step * Int((maxValue / Double(step)).rounded(.up)), step)
+}
+
+private func f1(_ x: Double) -> String { String(format: "%.1f", x) }
+
+/// Python's f"{n:,}" for a whole number.
+func pyCommaInt(_ n: Int) -> String {
+    let digits = Array(String(abs(n)))
+    var out = ""
+    for (i, ch) in digits.enumerated() {
+        if i > 0 && (digits.count - i) % 3 == 0 { out.append(",") }
+        out.append(ch)
+    }
+    return (n < 0 ? "-" : "") + out
+}
+
+func renderYearChart(year: Int, months: [Int: Double], total: String, niceMax: Int, step: Int) -> String {
+    let plotW = chW - chLeft - chRight
+    let plotH = chH - chTop - chBottom
+    let base = chTop + plotH
+    let slot = plotW / 12
+    var parts: [String] = []
+
+    var tick = 0
+    while tick <= niceMax {
+        let y = base - Double(tick) / Double(niceMax) * plotH
+        parts.append("<line class=\"grid\" x1=\"\(f1(chLeft))\" x2=\"\(f1(chW - chRight))\" "
+            + "y1=\"\(f1(y))\" y2=\"\(f1(y))\"/>"
+            + "<text class=\"tick\" x=\"\(f1(chLeft - 8))\" y=\"\(f1(y))\" dy=\"0.32em\" "
+            + "text-anchor=\"end\">$\(pyCommaInt(tick))</text>")
+        tick += step
+    }
+
+    var peakMonth: Int?
+    var peakValue = 0.0
+    for m in 1...12 { if let v = months[m], v > peakValue { peakMonth = m; peakValue = v } }
+
+    for m in 1...12 {
+        let cx = chLeft + Double(m - 1) * slot + slot / 2
+        parts.append("<text class=\"month\" x=\"\(f1(cx))\" y=\"\(f1(chH - 8))\" "
+            + "text-anchor=\"middle\">\(monthAbbr[m - 1])</text>")
+        guard let v = months[m] else { continue }
+        var h = max(v, 0.0) / Double(niceMax) * plotH
+        if v > 0 && h < 1 { h = 1.0 }
+        if h <= 0 { continue }
+        let x = cx - chBar / 2
+        let y = base - h
+        let r = min(4.0, h / 2, chBar / 2)
+        let label = "\(monthNames[m - 1]) \(year): \(fmtMoney(pyFixed2(v)))"
+        parts.append("<path class=\"bar\" d=\"M\(f1(x)),\(f1(base)) V\(f1(y + r)) "
+            + "Q\(f1(x)),\(f1(y)) \(f1(x + r)),\(f1(y)) H\(f1(x + chBar - r)) "
+            + "Q\(f1(x + chBar)),\(f1(y)) \(f1(x + chBar)),\(f1(y + r)) V\(f1(base)) Z\">"
+            + "<title>\(esc(label))</title></path>")
+        if m == peakMonth {
+            parts.append("<text class=\"peak\" x=\"\(f1(cx))\" y=\"\(f1(y - 6))\" "
+                + "text-anchor=\"middle\">\(fmtMoney(pyFixed2(v)))</text>")
+        }
+    }
+
+    if !months.values.contains(where: { $0 > 0 }) {
+        parts.append("<text class=\"empty\" x=\"\(f1(chLeft + plotW / 2))\" y=\"\(f1(chTop + plotH / 2))\" "
+            + "text-anchor=\"middle\">No spending this year</text>")
+    }
+
+    return "<figure class=\"year-chart\">"
+        + "<figcaption><span class=\"year\">\(year)</span>"
+        + "<span class=\"year-total\">\(fmtMoney(total))</span></figcaption>"
+        + "<svg viewBox=\"0 0 \(Int(chW)) \(Int(chH))\" role=\"img\" "
+        + "aria-label=\"Spending by month in \(year)\">\(parts.joined())</svg>"
+        + "</figure>"
+}
+
+/// One bar chart per year, all on the same scale, placed after the "Spending by month" table.
+func renderMonthlyCharts(_ amounts: [Int: [Int: Double]], firstSeen: [(Int, Int)], years: [Int]) -> String {
+    guard !firstSeen.isEmpty else { return "" }
+    // max() over the values in first-seen order, like Python's max(amounts.values())
+    let maxValue = firstSeen.map { amounts[$0.0]![$0.1]! }.max()!
+    let (niceMax, step) = niceScale(maxValue)
+    let charts = years.map { y -> String in
+        let months = amounts[y] ?? [:]
+        let total = pyFixed2(firstSeen.filter { $0.0 == y }.map { amounts[y]![$0.1]! }.reduce(0.0, +))
+        return renderYearChart(year: y, months: months, total: total, niceMax: niceMax, step: step)
+    }
+    return "<h2 class=\"section-title\">Spending by month, by year</h2>\n"
+        + "<div class=\"year-charts\">\(charts.joined())</div>\n"
+        + "<p class=\"monthly-note\">All charts use the same scale, so bar heights can be "
+        + "compared across years. Hover a bar for its exact amount.</p>\n"
 }
 
 /// "%B %d, %Y at %I:%M %p", e.g. "November 06, 2026 at 10:24 AM".

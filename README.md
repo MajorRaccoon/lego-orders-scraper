@@ -2,7 +2,7 @@
 
 A personal tool that downloads **your own** LEGO.com order history, with item-level detail, and saves it as JSON, CSV and an HTML report.
 
-For every order it records the order number, date, status and total. For every item it records the name, item number or SKU, quantity, regular and sale price, free-gift / backorder / gift-card / loose-piece flags, custom build IDs (Minifigure Factory) and tracking number. The HTML report also has a **monthly spending table**.
+For every order it records the order number, date, status and total. For every item it records the name, item number or SKU, quantity, regular and sale price, free-gift / backorder / gift-card / loose-piece flags, custom build IDs (Minifigure Factory) and tracking number. The HTML report also has a **monthly spending table** and a **bar chart of monthly spending for each year**.
 
 It drives a real Chromium browser with [Playwright](https://playwright.dev/python/). **You log in to LEGO.com yourself** in that browser window (so CAPTCHA and 2FA work normally). The tool never asks for or stores your password.
 
@@ -207,7 +207,7 @@ More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README
 |---|---|
 | `lego_orders.json` | One object per order, with a nested `items` list. |
 | `lego_order_items.csv` | One row per item. Opens in Excel / Numbers / Google Sheets. |
-| `lego_orders.html` | Self-contained report (all orders, items, monthly spending). Just open it in a browser. Written every run unless you use `--no-html`. |
+| `lego_orders.html` | Self-contained report (all orders, items, a monthly spending table and per-year bar charts). Just open it in a browser. Written every run unless you use `--no-html`. |
 
 Prices: each item has `regular_price` and `sale_price`. They're equal when the item wasn't on sale, and both are empty for free gifts.
 

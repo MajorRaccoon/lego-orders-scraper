@@ -130,6 +130,7 @@ import csv
 import datetime
 import html
 import json
+import math
 import os
 import platform
 import re
@@ -146,7 +147,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "32"  # bump by 1 with every change to this script
+__version__ = "33"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -1591,11 +1592,13 @@ _HTML_STYLE = """
     color-scheme: light dark;
     --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1f; --muted: #6b6b70;
     --border: #e3e3e0; --accent: #d01012; --accent-soft: #fdeceb;
+    --bar: #2a78d6;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #17171a; --panel: #212125; --text: #ededf0; --muted: #9a9aa2;
       --border: #313136; --accent: #ff5a5c; --accent-soft: #3a1e1f;
+      --bar: #3987e5;
     }
   }
   * { box-sizing: border-box; }
@@ -1664,6 +1667,18 @@ _HTML_STYLE = """
   .monthly-table tr.totals td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none;
     background: var(--bg); }
   .monthly-note { color: var(--muted); font-size: 0.8em; margin: 0 0 32px; }
+  .year-charts { display: grid; gap: 12px; margin-bottom: 8px; }
+  .year-chart { margin: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 6px; }
+  .year-chart figcaption { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .year-chart .year { font-weight: 600; }
+  .year-chart .year-total { color: var(--muted); font-size: 0.9em; font-variant-numeric: tabular-nums; }
+  .year-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .year-chart .grid { stroke: var(--border); stroke-width: 1; }
+  .year-chart .tick, .year-chart .month { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .year-chart .peak { fill: var(--text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .year-chart .empty { fill: var(--muted); font-size: 13px; font-style: italic; }
+  .year-chart .bar { fill: var(--bar); }
+  .year-chart .bar:hover { opacity: 0.75; }
 </style>
 """
 
@@ -1849,6 +1864,131 @@ def _render_monthly_spending_table(orders):
         '<div class="monthly-wrap"><table class="monthly-table">'
         f"<thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>\n"
         + note
+        + _render_monthly_charts(amounts, years)
+    )
+
+
+_MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+# Chart geometry (SVG viewBox units; the SVG scales to the page width).
+_CH_W, _CH_H = 920.0, 230.0
+_CH_LEFT, _CH_RIGHT, _CH_TOP, _CH_BOTTOM = 64.0, 8.0, 22.0, 28.0
+_CH_BAR = 24.0  # bar thickness; the rest of each month's slot is air
+
+
+def _nice_scale(max_value):
+    """A round axis maximum and tick step for max_value (whole dollars, at
+    most 4 intervals): step is 1, 2 or 5 x a power of ten."""
+    if max_value <= 0:
+        return 1, 1
+    raw = max_value / 4
+    mag = 1
+    while mag * 10 <= raw:
+        mag *= 10
+    step = 10 * mag
+    for m in (1, 2, 5):
+        if m * mag >= raw:
+            step = m * mag
+            break
+    return step * math.ceil(max_value / step), step
+
+
+def _f1(x):
+    return f"{x:.1f}"
+
+
+def _render_year_chart(year, months, total, nice_max, step):
+    """One year's bar chart as inline SVG: a bar per month (heights on the
+    shared scale), recessive gridlines with dollar ticks, month labels, the
+    year's busiest month labeled, and a hover tooltip on every bar."""
+    plot_w = _CH_W - _CH_LEFT - _CH_RIGHT
+    plot_h = _CH_H - _CH_TOP - _CH_BOTTOM
+    base = _CH_TOP + plot_h
+    slot = plot_w / 12
+
+    parts = []
+    tick = 0
+    while tick <= nice_max:
+        y = base - tick / nice_max * plot_h
+        parts.append(
+            f'<line class="grid" x1="{_f1(_CH_LEFT)}" x2="{_f1(_CH_W - _CH_RIGHT)}" '
+            f'y1="{_f1(y)}" y2="{_f1(y)}"/>'
+            f'<text class="tick" x="{_f1(_CH_LEFT - 8)}" y="{_f1(y)}" dy="0.32em" '
+            f'text-anchor="end">${tick:,}</text>'
+        )
+        tick += step
+
+    peak_month = None
+    peak_value = 0.0
+    for m in range(1, 13):
+        v = months.get(m)
+        if v is not None and v > peak_value:
+            peak_month, peak_value = m, v
+
+    for m in range(1, 13):
+        cx = _CH_LEFT + (m - 1) * slot + slot / 2
+        parts.append(
+            f'<text class="month" x="{_f1(cx)}" y="{_f1(_CH_H - 8)}" '
+            f'text-anchor="middle">{_MONTH_ABBR[m - 1]}</text>'
+        )
+        v = months.get(m)
+        if v is None:
+            continue
+        h = max(v, 0.0) / nice_max * plot_h
+        if v > 0 and h < 1:
+            h = 1.0  # keep a tiny month visible
+        if h <= 0:
+            continue
+        x = cx - _CH_BAR / 2
+        y = base - h
+        r = min(4.0, h / 2, _CH_BAR / 2)
+        label = f"{_MONTH_NAMES[m - 1]} {year}: {_fmt_money(f'{v:.2f}')}"
+        parts.append(
+            f'<path class="bar" d="M{_f1(x)},{_f1(base)} V{_f1(y + r)} '
+            f'Q{_f1(x)},{_f1(y)} {_f1(x + r)},{_f1(y)} H{_f1(x + _CH_BAR - r)} '
+            f'Q{_f1(x + _CH_BAR)},{_f1(y)} {_f1(x + _CH_BAR)},{_f1(y + r)} V{_f1(base)} Z">'
+            f"<title>{_esc(label)}</title></path>"
+        )
+        if m == peak_month:
+            parts.append(
+                f'<text class="peak" x="{_f1(cx)}" y="{_f1(y - 6)}" '
+                f'text-anchor="middle">{_fmt_money(f"{v:.2f}")}</text>'
+            )
+
+    if not any(v > 0 for v in months.values()):
+        parts.append(
+            f'<text class="empty" x="{_f1(_CH_LEFT + plot_w / 2)}" y="{_f1(_CH_TOP + plot_h / 2)}" '
+            'text-anchor="middle">No spending this year</text>'
+        )
+
+    return (
+        '<figure class="year-chart">'
+        f'<figcaption><span class="year">{year}</span>'
+        f'<span class="year-total">{_fmt_money(total)}</span></figcaption>'
+        f'<svg viewBox="0 0 {_CH_W:g} {_CH_H:g}" role="img" '
+        f'aria-label="Spending by month in {year}">{"".join(parts)}</svg>'
+        "</figure>"
+    )
+
+
+def _render_monthly_charts(amounts, years):
+    """One bar chart per year (same scale for all, so years can be compared by
+    bar height), placed after the "Spending by month" table. `amounts` is the
+    table's {(year, month): dollars} dict; years with no orders get an empty
+    chart, just as they get a column of dashes in the table."""
+    if not amounts:
+        return ""
+    nice_max, step = _nice_scale(max(amounts.values()))
+    charts = []
+    for y in years:
+        months = {m: v for (yy, m), v in amounts.items() if yy == y}
+        total = f"{sum(v for (yy, _), v in amounts.items() if yy == y):.2f}"
+        charts.append(_render_year_chart(y, months, total, nice_max, step))
+    return (
+        '<h2 class="section-title">Spending by month, by year</h2>\n'
+        f'<div class="year-charts">{"".join(charts)}</div>\n'
+        '<p class="monthly-note">All charts use the same scale, so bar heights can be '
+        "compared across years. Hover a bar for its exact amount.</p>\n"
     )
 
 
