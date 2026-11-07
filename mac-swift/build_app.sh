@@ -10,7 +10,13 @@ VERSION=$(sed -n 's/^public let legoSwiftVersion = "\(.*\)"/\1/p' Sources/LegoCo
 OUT="dist/$APP.app"
 
 echo "==> Running the tests"
-swift test 2>&1 | grep -E "Executed [0-9]+ tests" | tail -1   # fails the build if any test fails
+TEST_LOG=$(mktemp)
+if ! swift test >"$TEST_LOG" 2>&1; then   # fails the build if any test fails
+  echo "    Tests failed or didn't build. Last lines of the output:"
+  tail -80 "$TEST_LOG"
+  exit 1
+fi
+grep -E "Executed [0-9]+ tests" "$TEST_LOG" | tail -1
 
 echo "==> Building v$VERSION (release)"
 ARCHS=(--arch arm64 --arch x86_64)   # universal: runs on Apple Silicon and Intel Macs
