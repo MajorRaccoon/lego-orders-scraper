@@ -35,6 +35,8 @@ assert "TopMost = $true" in win[-1] and "$o.Show();" in win[-1] and "[LegoPick.W
 assert win[-1].index("$o.Show();") < win[-1].index("::Front(") < win[-1].index("ShowDialog($o)") < win[-1].index("$o.Close()")
 assert "try { Add-Type" in win[-1]   # if the helper can't load, the dialog still opens
 assert "[LegoPick.Win]::FindDialog()" in win[-1] and "$t.Start()" in win[-1]   # the dialog itself is pushed forward too
+assert "$script:tries -ge 6" in win[-1] and "[LegoPick.Win]::Flash($o.Handle)" in win[-1]   # retries, then flashes its taskbar button
+assert "ShowInTaskbar = $true" in win[-1] and "Text = 'Pick ''it'''" in win[-1]   # the dialog can be found on the taskbar
 assert len(subprocess.list2cmdline(win)) < 30000   # fits a Windows command line
 print("Windows: folder dialog is brought in front of the browser: OK")
 
@@ -94,8 +96,9 @@ if platform.system() == "Windows":
             "$f = New-Object System.Windows.Forms.Form -Property @{Text = 'Browser stand-in'; Width = 1400; Height = 1000; StartPosition = 'CenterScreen'}; "
             "$f.add_Shown({ $f.Activate() }); [System.Windows.Forms.Application]::Run($f)"])
         time.sleep(5)
-        dialog = subprocess.Popen(fp.folder_dialog_command(start, "Pick a folder"),
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        dialog = subprocess.Popen(fp.folder_dialog_command(start, "Pick a folder"),   # launched the way the app does
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                  creationflags=0x08000000)
         try:
             r = subprocess.run(["powershell", "-NoProfile", "-Command", "& {" + watch + "}", str(dialog.pid), str(stand_in.pid)],
                                capture_output=True, text=True, timeout=120)

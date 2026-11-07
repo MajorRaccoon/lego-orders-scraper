@@ -61,17 +61,32 @@ _WIN_FRONT_CS = (
     'if (c.ToString() == "#32770" && IsWindowVisible(h)) { found = h; return false; } '
     "return true; }, IntPtr.Zero); "
     "return found; } "
-    "public static bool Front(IntPtr h) { "
-    "keybd_event(0x12, 0, 0, UIntPtr.Zero); "  # Alt down
+    '[DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i); '
+    "[StructLayout(LayoutKind.Sequential)] public struct FLASHWINFO "
+    "{ public uint cbSize; public IntPtr hwnd; public uint dwFlags; public uint uCount; public uint dwTimeout; } "
+    '[DllImport("user32.dll")] public static extern bool FlashWindowEx(ref FLASHWINFO f); '
+    # Flash a window's taskbar button until it's clicked (FLASHW_ALL | FLASHW_TIMERNOFG).
+    "public static void Flash(IntPtr h) { FLASHWINFO f = new FLASHWINFO(); "
+    "f.cbSize = (uint)Marshal.SizeOf(f); f.hwnd = h; f.dwFlags = 3 | 12; FlashWindowEx(ref f); } "
+    "static string Name(IntPtr h) { System.Text.StringBuilder c = new System.Text.StringBuilder(64); "
+    "GetClassName(h, c, 64); return c.ToString(); } "
+    # Returns "focused", "on-top-not-focused (focus: <class>)" or "not-on-top (...)".
+    "public static string Front(IntPtr h) { "
+    "SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); "  # HWND_TOPMOST, no move/size, show
+    "if (GetForegroundWindow() != h) { "
+    "keybd_event(0x12, 0, 0, UIntPtr.Zero); "  # Alt down: lifts Windows' foreground lock
+    "System.Threading.Thread.Sleep(30); "
     "uint fg = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero); "
     "uint me = GetCurrentThreadId(); "
     "bool joined = fg != 0 && fg != me && AttachThreadInput(me, fg, true); "
-    "SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); "  # HWND_TOPMOST, no move/size, show
-    "BringWindowToTop(h); "
-    "bool ok = SetForegroundWindow(h); "
+    "BringWindowToTop(h); SetForegroundWindow(h); "
     "if (joined) { AttachThreadInput(me, fg, false); } "
-    "keybd_event(0x12, 0, 2, UIntPtr.Zero); "  # Alt up (lands on our window, so the browser never sees an Alt press)
-    "return ok || GetForegroundWindow() == h; }"
+    "keybd_event(0x12, 0, 2, UIntPtr.Zero); "  # Alt up
+    "System.Threading.Thread.Sleep(50); } "
+    "IntPtr now = GetForegroundWindow(); "
+    'if (now == h) { return "focused"; } '
+    'string where = " (focus: " + Name(now) + ")"; '
+    'return ((GetWindowLong(h, -20) & 8) != 0 ? "on-top-not-focused" : "not-on-top") + where; }'
 )
 
 
@@ -93,19 +108,24 @@ def folder_dialog_command(start=None, prompt=DEFAULT_PROMPT, system=None):
             f"$d.Description = {_powershell_quote(prompt)}; "
             "$d.ShowNewFolderButton = $true; "
             + (f"$d.SelectedPath = {_powershell_quote(start)}; " if start else "")
-            # A tiny invisible always-on-top window, shown and pushed to the front, owns the
-            # dialog (so the dialog opens centered on screen). Once the dialog itself is open,
-            # a timer finds it and pushes it to the front too. "front:..." goes to stderr so
-            # choose_folder() can log it if Windows refused.
+            # A tiny invisible always-on-top window owns the dialog (so the dialog opens
+            # centered on screen) and gives it a taskbar button. Once the dialog is open, a
+            # timer pushes it to the front, retrying a few times; if Windows still won't give
+            # it the focus, the taskbar button flashes. The result ("front:...") goes to
+            # stderr, and choose_folder() logs it.
             + "$o = New-Object System.Windows.Forms.Form -Property @{TopMost = $true; "
-            "ShowInTaskbar = $false; FormBorderStyle = 'None'; Opacity = 0; "
+            f"Text = {_powershell_quote(prompt)}; ShowInTaskbar = $true; FormBorderStyle = 'None'; Opacity = 0; "
             "StartPosition = 'CenterScreen'; Size = New-Object System.Drawing.Size(1, 1)}; "
             "$o.Show(); "
-            "$t = New-Object System.Windows.Forms.Timer -Property @{Interval = 100}; "
+            "$t = New-Object System.Windows.Forms.Timer -Property @{Interval = 150}; "
+            "$script:tries = 0; "
             f"try {{ Add-Type -Namespace LegoPick -Name Win -MemberDefinition {_powershell_quote(_WIN_FRONT_CS)}; "
             "[void][LegoPick.Win]::Front($o.Handle); "
             "$t.add_Tick({ $h = [LegoPick.Win]::FindDialog(); "
-            "if ($h -ne [IntPtr]::Zero) { $t.Stop(); [Console]::Error.Write('front:' + [LegoPick.Win]::Front($h)) } }); "
+            "if ($h -ne [IntPtr]::Zero) { $script:tries++; $r = [LegoPick.Win]::Front($h); "
+            "if ($r -eq 'focused' -or $script:tries -ge 6) { $t.Stop(); "
+            "if ($r -ne 'focused') { [LegoPick.Win]::Flash($o.Handle) }; "
+            "[Console]::Error.Write('front:' + $r + ' after ' + $script:tries + ' tries') } } }); "
             "$t.Start() } catch { [Console]::Error.Write('front:error ' + $_) }; "
             "$o.Activate(); "
             "$ok = $d.ShowDialog($o) -eq [System.Windows.Forms.DialogResult]::OK; "
@@ -142,9 +162,10 @@ def choose_folder(start=None, prompt=DEFAULT_PROMPT):
     except (OSError, subprocess.TimeoutExpired):
         return None
     note = (result.stderr or "").strip()
-    if note and note != "front:True":
-        # e.g. Windows refused to bring the dialog in front of the browser
-        print(f"Folder dialog note: {note[:300]}", file=sys.stderr, flush=True)
+    if note:
+        # Windows: whether the dialog came to the front ("front:focused after 1 tries",
+        # or why not) -- shows in the app's console window and log, for troubleshooting.
+        print(f"Folder dialog: {note[:300]}", file=sys.stderr, flush=True)
     path = (result.stdout or "").strip()
     if result.returncode != 0 or not path:
         return None  # cancelled
