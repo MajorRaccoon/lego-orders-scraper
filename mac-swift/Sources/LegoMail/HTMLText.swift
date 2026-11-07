@@ -45,9 +45,9 @@ public func decodeHTMLEntities(_ s: String) -> String {
         let name = ns.substring(with: m.range(at: 1))
         var replacement: String?
         if name.hasPrefix("#x") || name.hasPrefix("#X") {
-            replacement = UInt32(name.dropFirst(2), radix: 16).flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+            replacement = scalarString(UInt32(name.dropFirst(2), radix: 16))
         } else if name.hasPrefix("#") {
-            replacement = UInt32(name.dropFirst()).flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+            replacement = scalarString(UInt32(name.dropFirst(), radix: 10))
         } else {
             replacement = namedEntities[name] ?? namedEntities[name.lowercased()]
         }
@@ -56,4 +56,10 @@ public func decodeHTMLEntities(_ s: String) -> String {
     }
     out += ns.substring(from: pos)
     return out
+}
+
+/// A code point as a one-character string; nil if it isn't a valid character.
+private func scalarString(_ code: UInt32?) -> String? {
+    guard let code, let scalar = Unicode.Scalar(code) else { return nil }
+    return String(Character(scalar))
 }

@@ -121,9 +121,10 @@ public func scanMail(_ o: MailScanOptions, stop: StopFlag = StopFlag(), log: (St
             }
         }
     }
-    log("Checked \(result.messagesChecked) email(s): \(result.emails.count) LEGO order email(s) found"
-        + (result.withoutOrderNumber > 0 ? ", \(result.withoutOrderNumber) LEGO email(s) without an order number skipped" : "")
-        + (result.unreadable > 0 ? ", \(result.unreadable) file(s) couldn't be read" : "") + ".")
+    var summary = "Checked \(result.messagesChecked) email(s): \(result.emails.count) LEGO order email(s) found"
+    if result.withoutOrderNumber > 0 { summary += ", \(result.withoutOrderNumber) LEGO email(s) without an order number skipped" }
+    if result.unreadable > 0 { summary += ", \(result.unreadable) file(s) couldn't be read" }
+    log(summary + ".")
     if let dir = o.saveTextDir, saved > 0 { log("Saved the text of \(saved) email(s) in \(dir.path)") }
     return result
 }
@@ -159,12 +160,17 @@ func saveEmailText(_ m: MailMessage, _ email: LegoEmail?, file: URL, number: Int
     if let e = email {
         out += "Order number: \(e.orderNumber)\nEmail kind: \(e.kind.rawValue) (status \(e.kind.status ?? "none"))\n"
         out += "Order date: \(e.orderDate ?? "(not in email)")\nTracking: \(e.trackingNumbers.joined(separator: ", "))\n"
-        out += "Summary: " + e.summary.keys.map { "\($0)=\(e.summary[$0] ?? "")" }.joined(separator: ", ") + "\n"
+        let summaryText = e.summary.keys.map { key in "\(key)=\(e.summary[key] ?? "")" }.joined(separator: ", ")
+        out += "Summary: \(summaryText)\n"
         out += "Items (\(e.items.count)):\n"
         for it in e.items {
-            out += "  - \(it.name) | number \(it.itemNumber ?? "-") | qty \(it.quantity.map(String.init) ?? "-") | "
-                + "regular \(it.regularPrice ?? "-") | sale \(it.salePrice ?? "-")"
-                + (it.isFreeGift ? " | free gift" : "") + (it.isPiece ? " | piece" : "") + (it.isGiftCard ? " | gift card" : "") + "\n"
+            let qty = it.quantity.map { String($0) } ?? "-"
+            var row = "  - \(it.name) | number \(it.itemNumber ?? "-") | qty \(qty)"
+            row += " | regular \(it.regularPrice ?? "-") | sale \(it.salePrice ?? "-")"
+            if it.isFreeGift { row += " | free gift" }
+            if it.isPiece { row += " | piece" }
+            if it.isGiftCard { row += " | gift card" }
+            out += row + "\n"
         }
     } else {
         out += "No LEGO order number found, so this email was skipped.\n"

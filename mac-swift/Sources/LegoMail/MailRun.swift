@@ -68,8 +68,8 @@ public func runMailImport(_ o: MailRunOptions, stop: StopFlag = StopFlag(), log:
     log("")
     for order in orders {
         let itemsText = order.items.isEmpty ? "no items found in its emails" : "\(order.items.count) item(s)"
-        log("  \(order.orderNumber)  \(order.orderDate ?? "date unknown")  \(order.status ?? "-")  "
-            + "\(order.total.map { "$" + $0 } ?? "total unknown")  \(itemsText)")
+        let total = order.total.map { "$\($0)" } ?? "total unknown"
+        log("  \(order.orderNumber)  \(order.orderDate ?? "date unknown")  \(order.status ?? "-")  \(total)  \(itemsText)")
     }
     log("\nWrote \(written.joined(separator: ", ")): \(all.count) order(s), \(withItems) with item detail. "
         + String(format: "(%.1f s)", Date().timeIntervalSince(started)))
