@@ -355,7 +355,7 @@ public func parseReceiptTableItems(_ lines: [String]) -> [LegoOrderLine] {
 
 /// Receipts lay out some fields as a column of labels followed by a column of values:
 ///     Order Date / Invoice No. / Invoice Date / Customer No.
-///     06 Oct 2026 / 1357256193 / 07 Oct 2026 / 833748993
+///     06 Oct 2026 / 5550005 / 07 Oct 2026 / 000000001
 /// Returns label -> value ("order date" -> "06 Oct 2026"), labels lowercased without "LEGO" or dots.
 public func labelColumnValues(_ lines: [String]) -> [String: String] {
     let label = "^(?:lego\\s+)?(?:order|invoice|receipt|customer|transaction)\\s*(?:no\\.?|number|#|date)$"
