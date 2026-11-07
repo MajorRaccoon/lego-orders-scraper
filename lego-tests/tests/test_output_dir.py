@@ -56,39 +56,56 @@ if platform.system() == "Windows":
     assert r.returncode == 0 and "front-ok" in r.stdout, r.stdout + r.stderr
     print("Windows: the bring-to-front helper compiles and runs: OK")
 
-    # On the GitHub Windows build machine only (it would pop up a dialog on your PC):
-    # put another app (Notepad) in front, open the real folder dialog, and check the
-    # dialog ends up as the window in front.
+    # On the GitHub Windows build machine only (it would pop up windows on your PC):
+    # open a big "browser stand-in" window, then the real folder dialog, and check the
+    # dialog is always-on-top and above the stand-in in the window stack (i.e. visible
+    # in front of it). Whether it also got the keyboard focus is reported, not required:
+    # Windows 11 may refuse that to a background app, but on-top is what you see.
     if os.environ.get("GITHUB_ACTIONS"):
         import time
         watch = (
             "Add-Type -Namespace T -Name U -MemberDefinition '"
             '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); '
+            '[DllImport("user32.dll")] public static extern IntPtr GetTopWindow(IntPtr h); '
+            '[DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint cmd); '
+            '[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); '
+            '[DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i); '
             '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid); '
             '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n);'
-            "'; $want = [uint32]$args[0]; $end = (Get-Date).AddSeconds(25); $last = ''; "
-            "while ((Get-Date) -lt $end) { $h = [T.U]::GetForegroundWindow(); $p = [uint32]0; "
+            "'; $dlgPid = [uint32]$args[0]; $otherPid = [uint32]$args[1]; $end = (Get-Date).AddSeconds(25); $msg = 'dialog never appeared'; "
+            "while ((Get-Date) -lt $end) { "
+            "$i = 0; $di = -1; $oi = -1; $dh = [IntPtr]::Zero; $h = [T.U]::GetTopWindow([IntPtr]::Zero); "
+            "while ($h -ne [IntPtr]::Zero) { if ([T.U]::IsWindowVisible($h)) { $p = [uint32]0; "
             "[void][T.U]::GetWindowThreadProcessId($h, [ref]$p); $c = New-Object System.Text.StringBuilder 64; "
-            "[void][T.U]::GetClassName($h, $c, 64); $last = $c.ToString() + ' pid=' + $p; "
-            "if ($p -eq $want -and $c.ToString() -eq '#32770') { 'FRONT ' + $last; exit 0 }; Start-Sleep -Milliseconds 200 }; "
-            "'NOT-FRONT ' + $last; exit 1"
+            "[void][T.U]::GetClassName($h, $c, 64); "
+            "if ($di -lt 0 -and $p -eq $dlgPid -and $c.ToString() -eq '#32770') { $di = $i; $dh = $h }; "
+            "if ($oi -lt 0 -and $p -eq $otherPid) { $oi = $i } }; "
+            "$i++; $h = [T.U]::GetWindow($h, 2) }; "
+            "if ($di -ge 0 -and $oi -ge 0) { "
+            "$top = ([T.U]::GetWindowLong($dh, -20) -band 8) -ne 0; $fp = [uint32]0; "
+            "[void][T.U]::GetWindowThreadProcessId([T.U]::GetForegroundWindow(), [ref]$fp); "
+            "$msg = 'dialog#' + $di + ' stand-in#' + $oi + ' always-on-top=' + $top + ' focused=' + ($fp -eq $dlgPid) + ' (focus pid ' + $fp + ', stand-in ' + $otherPid + ')'; "
+            "if ($di -lt $oi -and $top) { 'ON-TOP ' + $msg; exit 0 } }; "
+            "Start-Sleep -Milliseconds 200 }; "
+            "'NOT-ON-TOP ' + $msg; exit 1"
         )
-        def front_check(pid):
-            r = subprocess.run(["powershell", "-NoProfile", "-Command", "& {" + watch + "}", str(pid)],
-                               capture_output=True, text=True, timeout=120)
-            return r.returncode == 0, (r.stdout + r.stderr).strip()
-        notepad = subprocess.Popen(["notepad.exe"])
-        time.sleep(3)
+        stand_in = subprocess.Popen(["powershell", "-NoProfile", "-STA", "-Command",
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$f = New-Object System.Windows.Forms.Form -Property @{Text = 'Browser stand-in'; Width = 1400; Height = 1000; StartPosition = 'CenterScreen'}; "
+            "$f.add_Shown({ $f.Activate() }); [System.Windows.Forms.Application]::Run($f)"])
+        time.sleep(5)
         dialog = subprocess.Popen(fp.folder_dialog_command(start, "Pick a folder"),
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
-            ok, seen = front_check(dialog.pid)
+            r = subprocess.run(["powershell", "-NoProfile", "-Command", "& {" + watch + "}", str(dialog.pid), str(stand_in.pid)],
+                               capture_output=True, text=True, timeout=120)
+            seen = (r.stdout + r.stderr).strip()
         finally:
-            dialog.kill(); notepad.kill()
+            dialog.kill(); stand_in.kill()
         note = dialog.communicate(timeout=30)[1]
-        print(f"Windows (GitHub): foreground check: {seen}; dialog note: {note.strip()!r}")
-        assert ok, f"the folder dialog didn't come in front of Notepad: {seen}; {note}"
-        print("Windows: the real folder dialog opens in front of another app: OK")
+        print(f"Windows (GitHub): {seen}; dialog note: {note.strip()!r}")
+        assert r.returncode == 0, f"the folder dialog isn't on top of the other window: {seen}; {note}"
+        print("Windows: the real folder dialog opens on top of another app: OK")
 elif platform.system() == "Darwin" and _sh.which("osacompile"):
     script = fp.folder_dialog_command(start, 'Pick "it"')[2]
     r = subprocess.run(["osacompile", "-e", script, "-o", str(sandbox / "pick.scpt")], capture_output=True, text=True)

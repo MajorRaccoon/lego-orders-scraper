@@ -46,6 +46,13 @@ jobs:
       - name: Run the Python test suite on Windows
         run: python lego-tests/run_tests.py
 
+      - name: Show the folder dialog on-top check
+        # Same check as in the suite, run alone so its result shows here even when it passes.
+        run: |
+          $env:LEGO_WORK_DIR = Join-Path $env:RUNNER_TEMP "lego-dialog-data"
+          $env:LEGO_LOG_FILE = ""
+          python lego-tests/tests/test_output_dir.py | Select-String "Windows"
+
       - name: Make the icon
         working-directory: windows-app
         run: python -c "from PIL import Image; Image.open('icon.png').save('icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
