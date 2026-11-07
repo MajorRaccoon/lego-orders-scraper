@@ -1,0 +1,99 @@
+# Builds the native macOS app (mac-swift/) on a Mac and checks that it works: the Python
+# and Swift tests pass (including Swift-vs-Python output parity), the app is universal
+# (Apple Silicon + Intel), its version and signature are right, and it starts and reads a
+# test page in its built-in browser. The zip is attached to the run as
+# "LEGO-Order-Scraper-macOS".
+# Runs when the Mac app's files (or the Python scripts it must match) change, or on demand
+# (Actions tab -> "Run workflow").
+name: macOS app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "mac-swift/**"
+      - "lego_orders_scraper.py"
+      - "lego_orders_to_html.py"
+      - "lego-tests/tests/test_swift_parity.py"
+      - "lego-tests/tests/test_webkit_price_lines.py"
+      - ".github/workflows/mac-app.yml"
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the machine, macOS and Swift
+        run: |
+          uname -m
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python test requirements
+        run: python -m pip install playwright cryptography flask
+
+      - name: Run the Python test suite on macOS (includes the Swift parity check)
+        run: python lego-tests/run_tests.py
+
+      - name: Build the app (runs the Swift tests, builds, signs, zips)
+        working-directory: mac-swift
+        run: ./build_app.sh
+
+      - name: Check - the app is universal, the right version, and properly signed
+        working-directory: mac-swift
+        run: |
+          APP="dist/LEGO Order Scraper.app"
+          archs=$(lipo -archs "$APP/Contents/MacOS/LEGO Order Scraper")
+          echo "architectures: $archs"
+          [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]] || { echo "not universal: $archs"; exit 1; }
+          want=$(sed -n 's/^public let legoSwiftVersion = "\(.*\)"/\1/p' Sources/LegoCore/Models.swift)
+          got=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
+          echo "version: $got (source says $want)"
+          [[ -n "$want" && "$got" == "$want" ]] || { echo "version mismatch"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          test -s "$APP/Contents/Resources/AppIcon.icns"
+
+      - name: Check - the app starts and reads a page in its built-in browser
+        working-directory: mac-swift
+        run: |
+          SITE="$RUNNER_TEMP/site"; OUT="$RUNNER_TEMP/selfcheck"
+          mkdir -p "$SITE"
+          cat > "$SITE/orders.html" <<'HTML'
+          <!doctype html><html><head><title>Self-check page</title></head>
+          <body><main><h1>My Orders</h1><p>Order Number: T123456789</p><p>Total $19.99</p></main></body></html>
+          HTML
+          python -m http.server 8798 --bind 127.0.0.1 --directory "$SITE" >/dev/null 2>&1 &
+          SERVER=$!
+          sleep 2
+          LEGO_SELFCHECK="$OUT" LEGO_SELFCHECK_URL="http://127.0.0.1:8798/orders.html" \
+            "dist/LEGO Order Scraper.app/Contents/MacOS/LEGO Order Scraper" &
+          APP_PID=$!
+          for i in $(seq 1 90); do kill -0 $APP_PID 2>/dev/null || break; sleep 1; done
+          if kill -0 $APP_PID 2>/dev/null; then kill $APP_PID; kill $SERVER; echo "app didn't finish its self-check in 90 s"; exit 1; fi
+          kill $SERVER || true
+          echo "--- state.txt"; cat "$OUT/state.txt"
+          echo "--- main-text.txt"; cat "$OUT/main-text.txt"; echo
+          grep -q "Order Number: T123456789" "$OUT/main-text.txt" || { echo "the app didn't read the test page"; exit 1; }
+          grep -q "^title: Self-check page" "$OUT/state.txt"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selfcheck-screenshots
+          path: ${{ runner.temp }}/selfcheck
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LEGO-Order-Scraper-macOS
+          path: mac-swift/dist/LEGO-Order-Scraper-native-mac.zip
+          retention-days: 30
