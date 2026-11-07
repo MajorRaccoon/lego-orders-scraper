@@ -16,7 +16,8 @@ import lego_orders_scraper as sc
 # --- folder dialog commands per OS ------------------------------------------
 start = sandbox  # an existing folder
 mac = fp.folder_dialog_command(start, 'Pick "it"', system="Darwin")
-assert mac[:2] == ["osascript", "-e"] and "choose folder" in mac[2] and f'POSIX file "{start}"' in mac[2]
+assert mac[:2] == ["osascript", "-e"] and "choose folder" in mac[2]
+assert f"POSIX file {fp._applescript_quote(start)}" in mac[2]      # backslashes/quotes escaped (Windows-style paths too)
 assert 'Pick \\"it\\"' in mac[2]                                  # quotes escaped for AppleScript
 win = fp.folder_dialog_command(start, "Pick 'it'", system="Windows")
 assert win[0] == "powershell" and "-STA" in win and "FolderBrowserDialog" in win[-1]

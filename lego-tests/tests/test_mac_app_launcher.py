@@ -95,7 +95,7 @@ try:
     assert st == 200 and cfg["app_mode"] == expected_mode and os.path.realpath(cfg["work_dir"]) == os.path.realpath(data), cfg  # macOS: /var -> /private/var
     assert call("/")[0] == 200 and b"Open data folder" in call("/")[1]
     assert call("/quit", "POST")[0] == 404          # window mode: no Quit route
-    if sys.platform != "darwin": assert call("/reveal", "POST")[0] == 404
+    if sys.platform not in ("darwin", "win32"): assert call("/reveal", "POST")[0] == 404  # Mac/Windows: opens the folder (not called here)
     assert json.loads(call("/status")[1])["status"] == "idle"
     print("--serve-only: free port, /config reports app_mode+data folder, /quit disabled in window mode: OK")
 finally:
