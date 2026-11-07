@@ -13,8 +13,10 @@ ZIP="dist/LEGO-Mail-Orders-mac.zip"
 echo "==> Running the tests"
 TEST_LOG=$(mktemp)
 if ! swift test >"$TEST_LOG" 2>&1; then   # fails the build if any test fails
-  echo "    Tests failed or didn't build. Last lines of the output:"
-  tail -80 "$TEST_LOG"
+  echo "    Tests failed or didn't build. The errors:"
+  grep -E "error:|: error|failed \(" "$TEST_LOG" | head -60 || true
+  echo "    Last lines of the output:"
+  tail -40 "$TEST_LOG"
   exit 1
 fi
 grep -E "Executed [0-9]+ tests" "$TEST_LOG" | tail -1

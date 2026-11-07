@@ -210,18 +210,18 @@ final class LegoEmailParserTests: XCTestCase {
                           isFreeGift: price == nil, isPiece: false, isGiftCard: false, status: nil, trackingNumber: nil)
         }
         let day: (Int) -> Date = { Date(timeIntervalSince1970: 1_788_000_000 + Double($0) * 86_400) }
-        let confirm = LegoEmail(orderNumber: "T1", kind: .confirmation, subject: "", sentDate: day(0), orderDate: "September 7, 2026",
+        let confirm = LegoEmail(orderNumber: "T123456781", kind: .confirmation, subject: "", sentDate: day(0), orderDate: "September 7, 2026",
                                 items: [line("A", "1001", "10.00"), line("B", "1002", "20.00"), line("Gift", "1003", nil)],
                                 summary: OrderedStrings([("total", "30.00")]), trackingNumbers: [], source: "")
-        let ship1 = LegoEmail(orderNumber: "T1", kind: .shipped, subject: "", sentDate: day(2), orderDate: nil,
+        let ship1 = LegoEmail(orderNumber: "T123456781", kind: .shipped, subject: "", sentDate: day(2), orderDate: nil,
                               items: [line("A", "1001", nil)], summary: OrderedStrings(), trackingNumbers: ["TRACK1"], source: "")
-        let cancel = LegoEmail(orderNumber: "T1", kind: .cancelled, subject: "", sentDate: day(1), orderDate: nil,
+        let cancel = LegoEmail(orderNumber: "T123456781", kind: .cancelled, subject: "", sentDate: day(1), orderDate: nil,
                                items: [line("B", "1002", nil)], summary: OrderedStrings(), trackingNumbers: [], source: "")
-        let other = LegoEmail(orderNumber: "T2", kind: .shipped, subject: "", sentDate: day(30), orderDate: nil,
+        let other = LegoEmail(orderNumber: "T123456782", kind: .shipped, subject: "", sentDate: day(30), orderDate: nil,
                               items: [], summary: OrderedStrings(), trackingNumbers: ["TRACK2"], source: "")
 
         let orders = buildOrders(from: [ship1, other, confirm, cancel], timeZone: TimeZone(identifier: "UTC")!)
-        XCTAssertEqual(orders.map(\.orderNumber), ["T2", "T1"])  // newest first
+        XCTAssertEqual(orders.map(\.orderNumber), ["T123456782", "T123456781"])  // newest first
         let t1 = orders[1]
         XCTAssertEqual(t1.status, "Shipped")  // the partial cancellation doesn't cancel the order
         XCTAssertEqual(t1.orderDate, "September 7, 2026")
@@ -230,12 +230,12 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(t1.items.map(\.trackingNumber), ["TRACK1", nil, nil])
         XCTAssertEqual(t1.items[0].regularPrice, "10.00")  // prices from the confirmation, not the shipping email
         XCTAssertEqual(t1.itemCountListed, 3)
-        XCTAssertEqual(t1.url, orderDetailURL("T1"))
+        XCTAssertEqual(t1.url, orderDetailURL("T123456781"))
         XCTAssertEqual(orders[0].status, "Shipped")
         XCTAssertTrue(orders[0].items.isEmpty)
         XCTAssertEqual(orders[0].orderDate, formatOrderDate(day(30), timeZone: TimeZone(identifier: "UTC")!))
 
         let kept = mergeMailOrders([orders[1]], previous: [orders[0], orders[1]])
-        XCTAssertEqual(kept.map(\.orderNumber), ["T2", "T1"])
+        XCTAssertEqual(kept.map(\.orderNumber), ["T123456782", "T123456781"])
     }
 }
