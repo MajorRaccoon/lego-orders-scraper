@@ -153,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "40"  # bump by 1 with every change to this script
+__version__ = "41"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -381,7 +381,22 @@ def _chrome_time_to_unix(chrome_time):
     return chrome_time / 1_000_000 - WINDOWS_TO_UNIX_EPOCH_SECONDS
 
 
+def _require_cryptography():
+    """--cookie-source needs the 'cryptography' package to decrypt Chrome's
+    cookies. It's optional: some builds (the Windows on ARM app) leave it out
+    because it isn't available there. Fail with a clear message instead."""
+    try:
+        import cryptography  # noqa: F401
+    except ImportError:
+        raise RuntimeError(
+            "--cookie-source needs the 'cryptography' package, which isn't "
+            "available in this build (for example the Windows on ARM app). "
+            "Log in to LEGO.com in the scraper's own browser window instead."
+        ) from None
+
+
 def _macos_derive_key():
+    _require_cryptography()
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
@@ -402,6 +417,7 @@ def _macos_derive_key():
 
 
 def _linux_derive_key():
+    _require_cryptography()
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
@@ -475,6 +491,8 @@ def _decrypt_cookie_value(encrypted_value, key, system):
     if not encrypted_value:
         return ""
     prefix = encrypted_value[:3]
+    if prefix in (b"v10", b"v11", b"v20"):
+        _require_cryptography()
 
     if system == "Windows":
         if prefix in (b"v10", b"v20"):
@@ -515,6 +533,7 @@ def load_chrome_cookies_for_domain(profile_path, domain_substring):
     """Return a list of cookies (already decrypted, in Playwright's
     add_cookies() format) for every cookie in the given Chrome profile whose
     host contains domain_substring."""
+    _require_cryptography()
     db_path = _find_cookie_db(profile_path)
     tmp_db = _copy_locked_db(db_path)
     system = platform.system()  # 'Darwin' / 'Linux' / 'Windows'

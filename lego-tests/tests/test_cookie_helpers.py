@@ -3,8 +3,22 @@ import os as _os
 SRC = _os.environ.get("LEGO_SRC") or _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 import sys
 sys.path.insert(0, SRC)
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import lego_orders_scraper as sc
+
+try:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+except ImportError:  # e.g. the Windows on ARM build, which can't install cryptography
+    for call in (lambda: sc._linux_derive_key(), lambda: sc.load_chrome_cookies_for_domain(".", "lego.com"),
+                 lambda: sc._decrypt_cookie_value(b"v10" + b"x" * 16, b"k" * 16, "Linux")):
+        try:
+            call(); assert False
+        except RuntimeError as e:
+            assert "needs the 'cryptography' package" in str(e), e
+    assert sc._decrypt_cookie_value(b"", b"k", "Linux") == "" and sc._decrypt_cookie_value(b"xyzabc", b"k", "Linux") == ""
+    assert sc._pkcs7_unpad(b"abc" + b"\x05" * 5) == b"abc" and sc._chrome_time_to_unix(0) == -1
+    print("cryptography not installed: --cookie-source fails with a clear message; other helpers still work: OK")
+    print("\nALL COOKIE HELPER TESTS PASSED (without cryptography)")
+    sys.exit(0)
 
 key = sc._linux_derive_key()
 assert len(key) == 16 and key == sc._linux_derive_key()
