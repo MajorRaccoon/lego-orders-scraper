@@ -253,6 +253,10 @@ func splitTrailingSetNumber(_ name: String) -> (String, String?) {
 /// it, up to the next item or the order summary. If there are no item-number lines at all
 /// (some shipping emails), items are found by their "Qty" lines instead.
 public func parseEmailItems(_ lines: [String]) -> [LegoOrderLine] {
+    // A receipt's item table ("Article Product Description Quantity Unit Price ... Net Amount").
+    let tableItems = parseReceiptTableItems(lines)
+    if !tableItems.isEmpty { return tableItems }
+
     struct Anchor { var index: Int; var nameIndex: Int; var name: String; var number: String?; var isPiece: Bool }
     var anchors: [Anchor] = []
     for (i, line) in lines.enumerated() {
@@ -318,6 +322,60 @@ public func parseEmailItems(_ lines: [String]) -> [LegoOrderLine] {
     return items
 }
 
+/// One row of a LEGO receipt's item table, all on one line:
+///     Article  Product  Description                  Qty  Unit  [Discount  Net price]  Net amount
+///     6487855  5008114  The Mandalorian with G GLOBAL 1  1  9.99  5.00  4.99  4.99
+/// "Product" is the item number. Indented "-" lines under a row (the parts of a Minifigure
+/// Factory build) aren't rows and are skipped.
+private let receiptRow = "^(\\d{4,9})\\s+(\\d{3,9})\\s+(.+?)\\s+(\\d{1,4})\\s+((?:-?\\d{1,3}(?:,\\d{3})*\\.\\d{2}\\s*){2,4})$"
+
+/// Items from a receipt's item table. Prices: the unit price is the regular price; the sale
+/// price is the net price when there's a discount (4 amounts), else net amount / quantity.
+public func parseReceiptTableItems(_ lines: [String]) -> [LegoOrderLine] {
+    var items: [LegoOrderLine] = []
+    for line in lines {
+        guard let m = MRx.search(receiptRow, line), let number = m[2], let rawName = m[3],
+              let q = m[4].flatMap({ Int($0) }), let money = m[5],
+              MRx.search("[A-Za-z]", rawName) != nil else { continue }
+        let values = money.split(separator: " ").map(String.init)
+        guard let unit = values.first, let amount = values.last,
+              let unitValue = amountValue(unit), let amountTotal = amountValue(amount) else { continue }
+        var sale = values.count == 4 ? values[2] : String(format: "%.2f", q > 0 ? amountTotal / Double(q) : amountTotal)
+        if amountValue(sale) == unitValue { sale = unit }
+        let free = unitValue == 0 && amountTotal == 0
+        let name = cleanItemName(rawName).trimmed
+        let isGiftCard = MRx.search("gift ?card|e-?gift", name) != nil
+        items.append(LegoOrderLine(
+            name: name, itemNumber: number, customID: nil, quantity: q,
+            prices: free ? emptyPrices() : buildPrices([unit, sale]), isFreeGift: free,
+            isPiece: false, isGiftCard: isGiftCard, status: nil, trackingNumber: nil))
+    }
+    return items
+}
+
+/// Receipts lay out some fields as a column of labels followed by a column of values:
+///     Order Date / Invoice No. / Invoice Date / Customer No.
+///     06 Oct 2026 / 1357256193 / 07 Oct 2026 / 833748993
+/// Returns label -> value ("order date" -> "06 Oct 2026"), labels lowercased without "LEGO" or dots.
+public func labelColumnValues(_ lines: [String]) -> [String: String] {
+    let label = "^(?:lego\\s+)?(?:order|invoice|receipt|customer|transaction)\\s*(?:no\\.?|number|#|date)$"
+    func key(_ s: String) -> String {
+        MRx.replace("\\s+", in: MRx.replace("^lego\\s+|\\.", in: s.lowercased(), with: ""), with: " ").trimmed
+    }
+    var result: [String: String] = [:]
+    var i = 0
+    while i < lines.count {
+        guard MRx.search(label, lines[i]) != nil else { i += 1; continue }
+        var j = i
+        while j < lines.count, MRx.search(label, lines[j]) != nil { j += 1 }
+        let count = j - i
+        guard j + count <= lines.count else { i = j; continue }
+        for n in 0..<count where result[key(lines[i + n])] == nil { result[key(lines[i + n])] = lines[j + n] }
+        i = j + count
+    }
+    return result
+}
+
 // MARK: Summary, date, tracking
 
 private let summaryRules: [(key: String, pattern: String)] = [
@@ -326,8 +384,14 @@ private let summaryRules: [(key: String, pattern: String)] = [
     ("tax", "^(?:estimated\\s+|sales\\s+)?(?:tax(?:es)?|vat|gst|hst)\\b"),
     ("insiders_discount", "^(?:lego\\s*®?\\s*)?insiders\\s+(?:discount|reward|savings)"),
     ("discount", "^(?:discount|promotion(?:al)?|promo(?:\\s*code)?|coupon|savings|you saved)\\b"),
-    ("total", "^(?:order\\s+|grand\\s+|estimated\\s+)?total\\b(?!\\s*(?:items|savings|quantity|qty))"),
+    ("total", "^(?:order\\s+|grand\\s+|estimated\\s+|invoice\\s+)?total\\b(?!\\s*(?:items|savings|quantity|qty))"),
 ]
+
+/// "Subtotal 26.97" (receipts often have no currency sign) -> "26.97". Only used on a line
+/// that already has a summary label, so a plain number there is that label's amount.
+private func bareAmount(atEndOf line: String) -> String? {
+    MRx.search("\\s(-?\\d{1,3}(?:,\\d{3})*\\.\\d{2})$", line).flatMap { $0[1] }
+}
 
 /// The order's money summary (subtotal, delivery, tax, discounts, total), same keys as the
 /// LEGO.com scraper. Reads "Label $1.00" and "Label" / "$1.00" layouts. "Free" delivery -> 0.00.
@@ -339,11 +403,12 @@ public func parseEmailSummary(_ lines: [String]) -> OrderedStrings {
         for (key, pattern) in summaryRules {
             guard MRx.search(pattern, line) != nil else { continue }
             if key != "total", found[key] != nil { break }
-            var value = amounts(in: line).last
+            var value = amounts(in: line).last ?? bareAmount(atEndOf: line)
             if value == nil, MRx.search("\\bfree\\b", line) != nil { value = "0.00" }
             if value == nil, i + 1 < lines.count {
                 let next = lines[i + 1]
                 if isOnlyAmount(next) { value = amounts(in: next).last }
+                else if MRx.search("^-?\\d{1,3}(?:,\\d{3})*\\.\\d{2}$", next) != nil { value = next }
                 else if MRx.search("^free$", next) != nil { value = "0.00" }
             }
             if var v = value {
@@ -364,6 +429,8 @@ public func parseEmailSummary(_ lines: [String]) -> OrderedStrings {
 /// "Purchase date: ...", "Date: ..." on a receipt)
 /// -> "September 7, 2026", the format the LEGO.com scraper saves. nil if there's no such line.
 public func findOrderDate(_ lines: [String]) -> String? {
+    let columns = labelColumnValues(lines)
+    if let d = columns["order date"].flatMap(normalizeDate) { return d }
     let labelled = "^(?:order\\s*date|date\\s*ordered|order\\s*placed(?:\\s*on)?|placed\\s*on|date\\s*placed|"
         + "(?:receipt|purchase|transaction|sale)\\s*date|date\\s*of\\s*purchase)\\s*[:]?\\s*(.*)$"
     // A bare "Date:" only counts when nothing better is there (a forwarded email's own
@@ -374,6 +441,12 @@ public func findOrderDate(_ lines: [String]) -> String? {
             var value = (m[1] ?? "").trimmed
             if value.isEmpty, i + 1 < lines.count { value = lines[i + 1] }
             if let d = normalizeDate(value) { return d }
+        }
+        if pattern == labelled {
+            // A receipt's own date column, before falling back to a bare "Date:".
+            for k in ["receipt date", "transaction date", "invoice date"] {
+                if let d = columns[k].flatMap(normalizeDate) { return d }
+            }
         }
     }
     return nil

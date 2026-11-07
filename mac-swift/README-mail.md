@@ -75,6 +75,7 @@ Emails such as "LEGO® Shop Receipt *(receipt number)* from *(date)*" carry the 
 
 - Mail sometimes keeps big attachments outside the email file (for `.partial.emlx` messages, in an `Attachments` folder next to them). The app looks there too.
 - An online order's receipt is merged with the order's other emails by its order number (`T…`).
+- LEGO's receipt layout is supported: the item table (`Article  Product  Description  Quantity  Unit Price  Discount  Net Price  Net Amount`), where the Product column is the item number and a discount gives the sale price; the date column (`Order Date`, `Invoice No.`, …); and totals without a `$` sign. The part lines of a Minifigure Factory build (starting with `-`) are left out.
 - A receipt with no LEGO order number (for example from a LEGO Store) is saved under its **receipt number**, dated from the receipt or the subject. Its "View on LEGO.com" link opens My Orders.
 - A scanned PDF (a picture, with no text in it) can't be read. The log counts these as "PDF(s) with no readable text".
 

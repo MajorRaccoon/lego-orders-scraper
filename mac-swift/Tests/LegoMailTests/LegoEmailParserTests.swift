@@ -203,6 +203,81 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(e?.orderDate, "November 1, 2026")  // from the subject
     }
 
+    /// The layout of a real LEGO Shop receipt PDF (as PDFKit reads it), with the customer's
+    /// name, address and numbers replaced: a label column then a value column for the dates,
+    /// and a one-line-per-item table without currency signs.
+    func testLegoRetailReceiptPDF() {
+        let pdf = """
+        LEGO Retail Receipt
+        Bill to: 000000001
+        Sample Customer
+        1 Example St
+        ANYTOWN NC 00000-0000
+        USA
+        Ship to: 000000002
+        Sample Customer
+        1 Example St
+        Anytown NC 00000-0000
+        Page 1 / 1
+        LEGO Order No.
+        T100000005
+        Order Date
+        Invoice No.
+        Invoice Date
+        Customer No.
+        06 Oct 2026
+        5550005
+        07 Oct 2026
+        000000001
+        Article Product Description Quantity Unit Price Discount Net Price Net Amount
+        6503751 3850082 Minifigure Factory Online V39 1 11.99 11.99
+        -6153328 -26880 -MINI HEAD NO. 1965 1
+        -6266075 -23187 -MINI WIG, NO. 106 1
+        -4275461 -76382 -MINI UPPER PART "NO. 1206" 1
+        -9339 -73200 -MINI BODY LOWER PART BLACK 1
+        -6361949 -53020 -INJECTION SYRINGE 1
+        -362201 -3622 -BRICK 1X3 1
+        -6535979 -904363 -SPECIAL BOX, NO. 43, 3850082 V39 1
+        6646481 5010228 Darth Vader™ Vacation B GLOBAL 1 1 9.99 9.99
+        6487855 5008114 The Mandalorian™ with G GLOBAL 1 1 9.99 5.00 4.99 4.99
+        Subtotal 26.97
+        Shipping & Handling Free
+        Tax 1.96
+        Invoice Total 28.93
+        Paid by Credit Card -28.93
+        Payment Terms
+        Credit card
+        Balance due USD
+        0.00
+        LEGO Retail Tel.: 1-844-903-5346
+        """
+        let subject = "LEGO® Shop  Receipt 5550005 from 10/07/2026"
+        let m = parseMail(Data("Subject: \(subject)\nFrom: LEGO Shop <noreply@e.lego.com>\n\nYour receipt is attached.".utf8))
+        guard let e = parseLegoEmail(m, attachmentTexts: [pdf]) else { return XCTFail("receipt not read") }
+        XCTAssertEqual(e.orderNumber, "T100000005")
+        XCTAssertEqual(e.kind, .confirmation)
+        XCTAssertEqual(e.orderDate, "October 6, 2026")  // the Order Date, not the Invoice Date
+        XCTAssertEqual(e.items.map(\.name), ["Minifigure Factory Online V39", "Darth Vader Vacation B GLOBAL 1",
+                                             "The Mandalorian with G GLOBAL 1"])
+        XCTAssertEqual(e.items.map(\.itemNumber), ["3850082", "5010228", "5008114"])
+        XCTAssertEqual(e.items.map(\.quantity), [1, 1, 1])
+        XCTAssertEqual(e.items.map(\.regularPrice), ["11.99", "9.99", "9.99"])
+        XCTAssertEqual(e.items.map(\.salePrice), ["11.99", "9.99", "4.99"])  // the $5.00 discount
+        XCTAssertEqual(e.summary.keys, ["subtotal", "delivery", "tax", "total"])
+        XCTAssertEqual(e.summary["subtotal"], "26.97")
+        XCTAssertEqual(e.summary["delivery"], "0.00")
+        XCTAssertEqual(e.summary["tax"], "1.96")
+        XCTAssertEqual(e.summary["total"], "28.93")
+
+        XCTAssertEqual(labelColumnValues(cleanLines(pdf))["invoice date"], "07 Oct 2026")
+        // Quantity 2 with no discount: sale = net amount / quantity = the unit price.
+        let two = parseReceiptTableItems(["1234567 75192 Millennium Falcon 2 849.99 1,699.98"])
+        XCTAssertEqual(two.first?.quantity, 2)
+        XCTAssertEqual(two.first?.salePrice, "849.99")
+        // A free gift row.
+        XCTAssertEqual(parseReceiptTableItems(["1234567 40000 Gift with Purchase 1 0.00 0.00"]).first?.isFreeGift, true)
+    }
+
     func testCombiningEmailsIntoOrders() {
         func line(_ name: String, _ number: String, _ price: String?) -> LegoOrderLine {
             LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: 1,
