@@ -93,7 +93,8 @@ print("Windows build spec, requirements and GitHub Actions workflow are consiste
 
 # --- every copy matches its source (a stale copy would be built into an app) --
 copies = {d: ["lego_orders_scraper.py", "lego_orders_webapp.py", "lego_orders_to_html.py",
-              "lego_repair_json_from_csv.py", "strip_non_ascii.py"] for d in ("docker", "mac-app", "windows-app")}
+              "lego_repair_json_from_csv.py", "strip_non_ascii.py", "lego_folder_picker.py"]
+          for d in ("docker", "mac-app", "windows-app")}
 for d, files in copies.items():
     for f in files:
         assert filecmp.cmp(ROOT / f, ROOT / d / f, shallow=False), f"{d}/{f} is out of date -- run ./sync_copies.sh"

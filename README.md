@@ -53,12 +53,14 @@ python3 lego_orders_scraper.py
 
 Your login is saved in a `lego_browser_profile/` folder next to the scraper script, so later runs skip the login (until LEGO expires the session).
 
-**Where files go:** on a Mac, the output files are saved in `~/Library/Application Support/LEGO Order Scraper/`, the same folder the Mac app uses, so every version shares and resumes the same data. Each run is also recorded in `~/Library/Logs/LEGO Order Scraper.log`. The start of each run prints both locations. On other systems, files go in the current folder and there's no log file. A relative `--output`, `--csv` or `--html` path is saved inside the data folder; give a full path (for example `~/Desktop/orders.json`) to save somewhere else.
+**Where files go:** on a Mac, the output files are saved in `~/Library/Application Support/LEGO Order Scraper/`, the same folder the Mac app uses, so every version shares and resumes the same data. Each run is also recorded in `~/Library/Logs/LEGO Order Scraper.log`. The start of each run prints both locations. On other systems, files go in the current folder and there's no log file. To save them elsewhere, use `--output-dir FOLDER`, or `--output-dir browse` to pick the folder in a dialog. Saved progress lives with the files, so a new folder starts fresh. A relative `--output`, `--csv` or `--html` name goes inside that folder.
 
 ### Common examples
 
 ```bash
 python3 lego_orders_scraper.py --since-date all          # entire order history (no date cutoff)
+python3 lego_orders_scraper.py --output-dir ~/Documents/LEGO   # save the files in another folder
+python3 lego_orders_scraper.py --output-dir browse       # pick the folder in a dialog
 python3 lego_orders_scraper.py --since-date 01/31/2026   # only orders on/after this date
 python3 lego_orders_scraper.py --max-orders 5            # only the 5 most recent orders
 python3 lego_orders_scraper.py --html report.html        # HTML report to another file (default lego_orders.html)
@@ -73,6 +75,7 @@ python3 lego_orders_scraper.py --version
 
 | Option | Default | What it does |
 |---|---|---|
+| `--output-dir FOLDER` | the data folder | Folder to save the JSON, CSV and HTML files in. Use `--output-dir browse` to pick it in your system's folder dialog. |
 | `--since-date MM/DD/YYYY` | `02/01/2024` | Only fetch orders placed on/after this date. Use `all` for no cutoff. Paging stops early once it passes the date. |
 | `--max-orders N` | all | Only fetch the N most recent orders. |
 | `--output PATH` | `lego_orders.json` | JSON output file. |
@@ -121,7 +124,8 @@ python3 lego_orders_webapp.py --no-browser     # don't auto-open a browser tab
 ```
 
 - On first run a Chromium window opens. Log in there, then click **"I've logged in, continue"** on the web page.
-- The **HTML report path** box starts as `lego_orders.html`. Clear it to skip the report.
+- **Save files to** starts with the data folder. Click **Browse…** to pick another folder in your system's folder dialog, or **Use default** to go back. The page remembers your choice. (Hidden in Docker, where files stay in the data volume.)
+- The **HTML report file name** box starts as `lego_orders.html`. Clear it to skip the report.
 - The **Leave out tracking numbers** checkbox is the same as `--no-tracking`.
 - **Stop** asks the scraper to finish gracefully. Clicking it a second time stops it immediately.
 - Result files appear as download links when the run finishes. They're saved in `~/Library/Application Support/LEGO Order Scraper/` on a Mac, the same folder as the command line and Mac app, and each run is recorded in `~/Library/Logs/LEGO Order Scraper.log`.
@@ -205,6 +209,8 @@ The result is `mac-swift/dist/LEGO Order Scraper.app` (Apple Silicon and Intel).
 2. First time only: log in to LEGO.com in the browser on the right side of the window. The app continues by itself once your orders appear.
 3. When it's done, click **Open HTML report** or **Show files in Finder**.
 
+To save the files somewhere else, use **Save files to → Browse…** at the top of the window. The app remembers your choice; **Use default** goes back.
+
 - Data: `~/Library/Application Support/LEGO Order Scraper/` (same files and format as the command line, so runs resume across versions)
 - Log: `~/Library/Logs/LEGO Order Scraper.log`
 
@@ -222,7 +228,7 @@ A double-clickable Windows app (Windows 10 or 11). It's the web UI packaged with
 
 - **Get it:** GitHub's Windows build server builds it automatically. Download **LEGO-Order-Scraper-windows** from the latest run of the **Windows app** workflow on the repo's **Actions** tab.
 - **Use it:** unzip it, keep the folder together, and double-click **LEGO Order Scraper.exe**. If SmartScreen warns, click **More info → Run anyway**.
-- Data and log: `%LOCALAPPDATA%\LEGO Order Scraper\`. Quit with **Quit app** on the page, or by closing the console window.
+- Data and log: `%LOCALAPPDATA%\LEGO Order Scraper\`. To save the files elsewhere, use **Save files to → Browse…** on the page. Quit with **Quit app** on the page, or by closing the console window.
 
 Full details: [`windows-app/README-windows.md`](windows-app/README-windows.md).
 
@@ -255,6 +261,7 @@ Prices: each item has `regular_price` and `sale_price`. They're equal when the i
 
 ## For developers
 
+- `lego_folder_picker.py` shows the system folder dialog for `--output-dir browse` and the web UI's **Browse…** button.
 - **The scripts in the repo root are the source of truth.** `docker/`, `mac-app/` and `windows-app/` hold copies (the app launcher's source is `mac-app/lego_orders_app.py`). After editing, run:
   ```bash
   ./sync_copies.sh

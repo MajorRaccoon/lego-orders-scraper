@@ -25,6 +25,14 @@ final class AppModel: ObservableObject {
     @Published var loadMoreDelay: Double { didSet { defaults.set(loadMoreDelay, forKey: "loadMoreDelay") } }
     @Published var loadMoreFinalWait: Double { didSet { defaults.set(loadMoreFinalWait, forKey: "loadMoreFinalWait") } }
     @Published var savePageText: Bool { didSet { defaults.set(savePageText, forKey: "savePageText") } }
+    /// Where the JSON, CSV and HTML files are saved ("Save files to"). Defaults to dataDir.
+    @Published var outputDir: URL {
+        didSet {
+            defaults.set(outputDir.path, forKey: "outputDir")
+            renameOldCSV(csvURL)
+            refreshFiles()
+        }
+    }
 
     let page = WebKitPage()
     private let defaults = UserDefaults.standard
@@ -33,12 +41,20 @@ final class AppModel: ObservableObject {
     private var loginConfirmed = false
     private var lineCounter = 0
 
-    /// ~/Library/Application Support/LEGO Order Scraper (same folder the earlier Python app used).
-    let dataDir: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    /// ~/Library/Application Support/LEGO Order Scraper (same folder the other versions use).
+    static let defaultDataDir: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("LEGO Order Scraper", isDirectory: true)
-    var jsonURL: URL { dataDir.appendingPathComponent("lego_orders.json") }
-    var csvURL: URL { dataDir.appendingPathComponent("lego_orders.csv") }
-    var htmlURL: URL { dataDir.appendingPathComponent("lego_orders.html") }
+    let dataDir = AppModel.defaultDataDir
+    var jsonURL: URL { outputDir.appendingPathComponent("lego_orders.json") }
+    var csvURL: URL { outputDir.appendingPathComponent("lego_orders.csv") }
+    var htmlURL: URL { outputDir.appendingPathComponent("lego_orders.html") }
+    var isDefaultOutputDir: Bool { outputDir.standardizedFileURL.path == dataDir.standardizedFileURL.path }
+    /// The folder for display, with the home folder shortened to "~".
+    var outputDirDisplay: String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let path = outputDir.path
+        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+    }
     let logFile: URL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Logs/LEGO Order Scraper.log")
 
@@ -53,6 +69,7 @@ final class AppModel: ObservableObject {
         loadMoreDelay = d.object(forKey: "loadMoreDelay") as? Double ?? 1.2
         loadMoreFinalWait = d.object(forKey: "loadMoreFinalWait") as? Double ?? 5.0
         savePageText = d.object(forKey: "savePageText") as? Bool ?? false
+        outputDir = d.string(forKey: "outputDir").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? AppModel.defaultDataDir
         try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
         renameOldCSV(csvURL)
         refreshFiles()
@@ -97,6 +114,12 @@ final class AppModel: ObservableObject {
             maxOrders = n
         }
 
+        do {
+            try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        } catch {
+            status = "Can't use the folder \(outputDirDisplay): \(error.localizedDescription) Choose another one."
+            return
+        }
         var o = ScrapeOptions(jsonURL: jsonURL, csvURL: csvURL, htmlURL: makeHTML ? htmlURL : nil)
         o.maxOrders = maxOrders
         o.sinceDate = useSinceDate ? SimpleDate(sinceDate) : nil
@@ -185,7 +208,25 @@ final class AppModel: ObservableObject {
     func openReport() { NSWorkspace.shared.open(htmlURL) }
 
     func openDataFolder() { NSWorkspace.shared.activateFileViewerSelecting([jsonURL, csvURL, htmlURL].filter {
-        FileManager.default.fileExists(atPath: $0.path) }.ifEmpty([dataDir])) }
+        FileManager.default.fileExists(atPath: $0.path) }.ifEmpty([outputDir])) }
+
+    /// "Browse...": pick the folder the files are saved in.
+    func chooseOutputFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose where to save the LEGO order files (JSON, CSV and HTML)."
+        panel.directoryURL = FileManager.default.fileExists(atPath: outputDir.path) ? outputDir : dataDir
+        if panel.runModal() == .OK, let url = panel.url {
+            outputDir = url
+            append("Files will be saved in \(outputDirDisplay)")
+        }
+    }
+
+    func resetOutputFolder() { outputDir = dataDir }
 
     func openLog() { NSWorkspace.shared.open(logFile) }
 

@@ -153,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "39"  # bump by 1 with every change to this script
+__version__ = "40"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -208,10 +208,26 @@ def log_file_path():
     return None
 
 
-def resolve_output_path(path):
-    """An absolute path (or ~/...) is used as given; a relative one goes in data_dir()."""
+def resolve_output_path(path, base=None):
+    """An absolute path (or ~/...) is used as given; a relative one goes in
+    `base` (the --output-dir folder), or data_dir() when there isn't one."""
     p = Path(path).expanduser()
-    return p if p.is_absolute() else data_dir() / p
+    return p if p.is_absolute() else Path(base or data_dir()) / p
+
+
+def choose_output_dir(value):
+    """--output-dir: a folder path (relative = from the current folder), or
+    "browse" to pick one in the system's folder dialog. None = data_dir()."""
+    if value is None:
+        return None
+    if str(value).strip().lower() in ("browse", "choose"):
+        from lego_folder_picker import choose_folder
+
+        chosen = choose_folder(start=data_dir())
+        if chosen is None:
+            raise SystemExit("No folder chosen (or no folder dialog available here) -- nothing done.")
+        return chosen
+    return Path(value).expanduser().resolve()
 
 
 class _Tee:
@@ -2281,15 +2297,22 @@ def main():
         "the next batch was just slow to render.",
     )
     parser.add_argument(
+        "--output-dir", default=None, metavar="FOLDER",
+        help="Folder to save the JSON, CSV and HTML files in (created if needed). "
+        "Default: the data folder -- ~/Library/Application Support/LEGO Order Scraper "
+        "on a Mac, %%LOCALAPPDATA%%\\LEGO Order Scraper on Windows. Use "
+        "'--output-dir browse' to choose it in your system's folder dialog. Saved "
+        "progress lives with the files, so a new folder starts fresh.",
+    )
+    parser.add_argument(
         "--output", default="lego_orders.json",
         help="Output JSON file (default: lego_orders.json). A relative path goes in "
-        "the data folder: ~/Library/Application Support/LEGO Order Scraper on a Mac "
-        "(or LEGO_WORK_DIR if set); the current folder elsewhere."
+        "--output-dir, or else the data folder."
     )
     parser.add_argument(
         "--csv", default=DEFAULT_CSV_PATH,
         help="Output CSV file, one row per item (default: lego_orders.csv, in the "
-        "data folder like --output).",
+        "same folder as --output).",
     )
     parser.add_argument(
         "--cookie-source", default=None,
@@ -2347,11 +2370,12 @@ def main():
     )
     args = parser.parse_args()
 
-    # Output files go in the data folder (relative paths are resolved there).
-    args.output = str(resolve_output_path(args.output))
-    args.csv = str(resolve_output_path(args.csv))
+    # Output files go in --output-dir, else the data folder (relative paths are resolved there).
+    out_base = choose_output_dir(args.output_dir)
+    args.output = str(resolve_output_path(args.output, out_base))
+    args.csv = str(resolve_output_path(args.csv, out_base))
     if args.html:
-        args.html = str(resolve_output_path(args.html))
+        args.html = str(resolve_output_path(args.html, out_base))
     log_path = _start_log()
 
     print(f"lego_orders_scraper.py v{__version__}")

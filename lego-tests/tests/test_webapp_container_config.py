@@ -20,8 +20,10 @@ def run(env_extra):
 
 r = run({"LEGO_WORK_DIR": work, "LEGO_NOVNC_PORT": "6080"})
 assert r["work"] == os.path.realpath(work), r
-assert r["cfg"] == {"novnc_port": "6080", "work_dir": os.path.realpath(work), "app_mode": None}, r
-print("env vars set -> WORK_DIR and noVNC port honored by /config: OK")
+cfg = r["cfg"]
+assert (cfg["novnc_port"], cfg["work_dir"], cfg["app_mode"]) == ("6080", os.path.realpath(work), None), r
+assert cfg["folder_option"] is False and cfg["can_browse"] is False, r   # Docker: files stay in the volume
+print("env vars set -> WORK_DIR and noVNC port honored by /config; folder choice hidden in Docker: OK")
 
 r = run({})
 import platform

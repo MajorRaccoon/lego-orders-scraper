@@ -25,15 +25,17 @@ This runs the tests, then builds `mac-swift/dist/LEGO Order Scraper.app` (works 
 4. **First time only:** log in to LEGO.com in the browser on the right. The app continues by itself once your order list appears, or you can click **"I've logged in, continue"**.
 5. Watch progress in the log at the bottom. When it's done, click **Open HTML report** or **Show files in Finder**.
 
+**Save files to** (top of the window) shows where the JSON, CSV and HTML files go. Click **Browse…** to choose another folder, or **Use default** to go back. Saved progress lives with the files, so a new folder starts fresh.
+
 **Stop** finishes the current order, saves and stops. Clicking it again stops right away. Progress is saved after every order, so **Start** picks up where it left off.
 
 | What | Where |
 |---|---|
-| Your orders (JSON, CSV, HTML) | `~/Library/Application Support/LEGO Order Scraper/` |
+| Your orders (JSON, CSV, HTML) | `~/Library/Application Support/LEGO Order Scraper/`, or the folder you chose under **Save files to** |
 | Log | `~/Library/Logs/LEGO Order Scraper.log` |
 | Saved LEGO login | WebKit's storage for this app. Remove it with **Forget saved LEGO login**. |
 
-Options that match the command line: the since-date box is `--since-date`, **Max orders** is `--max-orders`, **Refetch everything** is `--fresh`, **Leave out tracking numbers** is `--no-tracking`, and **Advanced** has the three wait times (`--delay`, `--load-more-delay`, `--load-more-final-wait`). `--cookie-source` isn't needed because you log in inside the app.
+Options that match the command line: the since-date box is `--since-date`, **Max orders** is `--max-orders`, **Refetch everything** is `--fresh`, **Save files to** is `--output-dir`, **Leave out tracking numbers** is `--no-tracking`, and **Advanced** has the three wait times (`--delay`, `--load-more-delay`, `--load-more-final-wait`). `--cookie-source` isn't needed because you log in inside the app.
 
 ## If orders come out wrong
 

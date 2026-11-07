@@ -24,11 +24,13 @@ To build a new one on demand, click **Run workflow** on that page. Artifacts are
 6. A Chromium window opens. Log in to LEGO.com there, then click **"I've logged in, continue"** on the web page. Your login is saved for next time.
 7. Results appear as download links on the page.
 
+To save the files somewhere else, use **Save files to → Browse…** at the top of the page. It opens the normal Windows folder dialog, and the page remembers your choice.
+
 **To quit:** click **Quit app** on the page, or close the console window. Progress is saved after every order, so quitting mid-run loses nothing already fetched.
 
 | What | Where |
 |---|---|
-| Your orders (JSON, CSV, HTML), saved login, downloaded browser | `%LOCALAPPDATA%\LEGO Order Scraper\` |
+| Your orders (JSON, CSV, HTML), saved login, downloaded browser | `%LOCALAPPDATA%\LEGO Order Scraper\` (orders: or the folder chosen under **Save files to**) |
 | Log | `%LOCALAPPDATA%\LEGO Order Scraper\LEGO Order Scraper.log` |
 
 To open that folder, paste `%LOCALAPPDATA%\LEGO Order Scraper` into File Explorer's address bar. Delete the folder to reset everything.

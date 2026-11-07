@@ -36,6 +36,30 @@ struct ContentView: View {
                     Text("Downloads your own LEGO.com order history.").font(.callout).foregroundStyle(.secondary)
                 }
 
+                GroupBox("Save files to") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(model.outputDirDisplay)
+                            .font(.callout)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .help(model.outputDir.path)
+                        HStack {
+                            Button("Browse…") { model.chooseOutputFolder() }
+                            if !model.isDefaultOutputDir {
+                                Button("Use default") { model.resetOutputFolder() }
+                            }
+                        }
+                        Text("Saved progress lives with the files, so a new folder starts fresh.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                }
+                .disabled(model.isBusy)
+
                 GroupBox("What to fetch") {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle("Only orders placed on or after", isOn: $model.useSinceDate)

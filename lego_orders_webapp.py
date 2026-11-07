@@ -66,7 +66,10 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
 
-__version__ = "11"  # this webapp's own version, independent of lego_orders_scraper.py's
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lego_folder_picker  # noqa: E402  (stdlib-only folder dialog, shared with the scraper)
+
+__version__ = "12"  # this webapp's own version, independent of lego_orders_scraper.py's
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRAPER_PATH = SCRIPT_DIR / "lego_orders_scraper.py"
@@ -100,6 +103,39 @@ NOVNC_PORT = os.environ.get("LEGO_NOVNC_PORT")
 # or "browser" (fallback: opened in the default browser). Unset otherwise.
 APP_MODE = os.environ.get("LEGO_APP_MODE")
 QUIT_HOOK = None  # the launcher installs a function here so /quit can shut the app down
+
+# Docker: files must stay in the container's data volume, so the "Save files to"
+# folder option is hidden there.
+IN_CONTAINER = NOVNC_PORT is not None or os.path.exists("/.dockerenv")
+
+# The last "Save files to" folder chosen on the page, remembered between runs.
+SETTINGS_PATH = WORK_DIR / "web_ui_settings.json"
+
+
+def load_settings():
+    try:
+        return json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_settings(settings):
+    try:
+        SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        SETTINGS_PATH.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+    except OSError:
+        pass  # remembering the folder is a convenience, never a reason to fail
+
+
+def output_base(config):
+    """The folder this run's files go in: the page's "Save files to" box (a
+    relative path is taken from WORK_DIR, like the scraper does), else WORK_DIR."""
+    value = str((config or {}).get("output_dir") or "").strip()
+    if not value:
+        return WORK_DIR
+    p = Path(value).expanduser()
+    return p if p.is_absolute() else WORK_DIR / p
+
 
 # Mirrors lego_orders_scraper.py's own argparse defaults, so the "download
 # this run's output" links know where to look even when the user left the
@@ -172,6 +208,8 @@ def build_argv(config):
         if config.get(key):
             argv.append(flag)
 
+    if not IN_CONTAINER:
+        _opt_str("output_dir", "--output-dir")
     _opt_number("max_orders", "--max-orders", int)
     _flag("headless", "--headless")
     _opt_number("delay", "--delay", float)
@@ -413,9 +451,9 @@ class ScrapeJob:
             raw_path = value or _DEFAULT_OUTPUT_PATHS.get(config_key)
             if not raw_path:
                 continue
-            path = Path(raw_path)
+            path = Path(raw_path).expanduser()
             if not path.is_absolute():
-                path = WORK_DIR / path
+                path = output_base(self.config) / path
             if path.is_file():
                 files[kind] = str(path)
         return files
@@ -433,15 +471,43 @@ def index():
 
 @app.route("/config")
 def config_route():
-    return jsonify({"novnc_port": NOVNC_PORT, "work_dir": str(WORK_DIR), "app_mode": APP_MODE})
+    folder_option = not IN_CONTAINER
+    return jsonify({
+        "novnc_port": NOVNC_PORT,
+        "work_dir": str(WORK_DIR),
+        "app_mode": APP_MODE,
+        "folder_option": folder_option,
+        "default_output_dir": str(WORK_DIR),
+        "output_dir": (load_settings().get("output_dir") or str(WORK_DIR)) if folder_option else str(WORK_DIR),
+        "can_browse": folder_option and lego_folder_picker.dialog_available(),
+    })
+
+
+@app.route("/browse", methods=["POST"])
+def browse_route():
+    """Open this computer's folder dialog (the server runs on your own machine,
+    so it appears on your screen) and return the folder chosen, if any."""
+    if IN_CONTAINER or not lego_folder_picker.dialog_available():
+        return jsonify({"ok": False, "error": "No folder dialog is available here."}), 404
+    data = request.get_json(force=True, silent=True) or {}
+    chosen = lego_folder_picker.choose_folder(start=data.get("start") or WORK_DIR)
+    if chosen is None:
+        return jsonify({"ok": False, "cancelled": True})
+    return jsonify({"ok": True, "path": str(chosen)})
 
 
 @app.route("/reveal", methods=["POST"])
 def reveal_route():
-    """macOS app only: open the data folder (saved orders, login) in Finder."""
-    if not APP_MODE or platform.system() != "Darwin":
-        return jsonify({"ok": False, "error": "Only available in the macOS app."}), 404
-    subprocess.Popen(["open", str(WORK_DIR)])
+    """Mac / Windows app: open the folder this run's files are saved in."""
+    if not APP_MODE or platform.system() not in ("Darwin", "Windows"):
+        return jsonify({"ok": False, "error": "Only available in the Mac and Windows apps."}), 404
+    data = request.get_json(force=True, silent=True) or {}
+    folder = output_base(data or job.config or {})
+    folder.mkdir(parents=True, exist_ok=True)
+    if platform.system() == "Darwin":
+        subprocess.Popen(["open", str(folder)])
+    else:
+        os.startfile(str(folder))  # Windows: open in File Explorer
     return jsonify({"ok": True})
 
 
@@ -463,6 +529,8 @@ def start_route():
         return jsonify({"ok": False, "error": str(e)}), 409
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+    if not IN_CONTAINER and "output_dir" in config:
+        save_settings({**load_settings(), "output_dir": str(config.get("output_dir") or "").strip()})
     return jsonify({"ok": True})
 
 
@@ -599,6 +667,9 @@ INDEX_HTML = r"""<!doctype html>
     background: var(--bg); color: var(--text); font-size: 0.95em;
   }
   .field { margin-bottom: 2px; }
+  .folder-row { margin-bottom: 14px; }
+  .folder-pick { display: flex; gap: 8px; align-items: center; }
+  .folder-pick input { flex: 1; min-width: 0; }
   .hint { font-size: 0.78em; color: var(--muted); margin-top: 3px; }
   .check { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
   .check label { margin: 0; color: var(--text); font-size: 0.95em; }
@@ -644,6 +715,15 @@ INDEX_HTML = r"""<!doctype html>
 
   <div class="panel">
     <h2>Options</h2>
+    <div class="field folder-row" id="folderRow" style="display:none">
+      <label for="output_dir">Save files to</label>
+      <div class="folder-pick">
+        <input type="text" id="output_dir" spellcheck="false">
+        <button type="button" class="btn-secondary" id="btnBrowse" style="display:none">Browse&hellip;</button>
+        <button type="button" class="btn-secondary" id="btnDefaultDir">Use default</button>
+      </div>
+      <div class="hint">The JSON, CSV and HTML files below are saved in this folder. Saved progress lives with the files, so a new folder starts fresh.</div>
+    </div>
     <div class="grid">
       <div class="field">
         <label for="max_orders">Max orders</label>
@@ -668,15 +748,15 @@ INDEX_HTML = r"""<!doctype html>
         <div class="hint">Only fetch item detail for orders on/after this date. Clear it to fetch every order.</div>
       </div>
       <div class="field">
-        <label for="output">Output JSON path</label>
+        <label for="output">JSON file name</label>
         <input type="text" id="output" value="lego_orders.json">
       </div>
       <div class="field">
-        <label for="csv">Output CSV path</label>
+        <label for="csv">CSV file name</label>
         <input type="text" id="csv" value="lego_orders.csv">
       </div>
       <div class="field">
-        <label for="html">HTML report path</label>
+        <label for="html">HTML report file name</label>
         <input type="text" id="html" value="lego_orders.html">
         <div class="hint">Clear it to skip the HTML report.</div>
       </div>
@@ -813,6 +893,7 @@ function confirmClick(btn, armedLabel, action) {
 
 function collectConfig() {
   return {
+    output_dir: $("output_dir").value,
     max_orders: $("max_orders").value,
     delay: $("delay").value,
     load_more_delay: $("load_more_delay").value,
@@ -891,9 +972,29 @@ btnEnter.addEventListener("click", () => fetch("/input", {
 }));
 
 fetch("/config").then((r) => r.json()).then((cfg) => {
+  if (cfg.folder_option) {
+    $("folderRow").style.display = "block";
+    $("output_dir").value = cfg.output_dir || cfg.default_output_dir;
+    $("btnDefaultDir").onclick = () => { $("output_dir").value = cfg.default_output_dir; };
+    if (cfg.can_browse) {
+      $("btnBrowse").style.display = "inline-block";
+      $("btnBrowse").onclick = async () => {
+        $("btnBrowse").disabled = true;
+        try {
+          const res = await fetch("/browse", {method: "POST", headers: {"Content-Type": "application/json"},
+                                              body: JSON.stringify({start: $("output_dir").value})});
+          const data = await res.json();
+          if (data.ok && data.path) $("output_dir").value = data.path;
+        } finally {
+          $("btnBrowse").disabled = false;
+        }
+      };
+    }
+  }
   if (cfg.app_mode) {
     $("btnReveal").style.display = "inline-block";
-    $("btnReveal").onclick = () => fetch("/reveal", {method: "POST"});
+    $("btnReveal").onclick = () => fetch("/reveal", {method: "POST", headers: {"Content-Type": "application/json"},
+                                                     body: JSON.stringify({output_dir: $("output_dir").value})});
   }
   if (cfg.app_mode === "browser") {
     $("btnQuit").style.display = "inline-block";

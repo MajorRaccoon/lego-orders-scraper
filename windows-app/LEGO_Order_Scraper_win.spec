@@ -19,7 +19,7 @@ for pkg in ("playwright", "flask", "werkzeug", "cryptography"):
 # modules the launcher imports lazily / that run in the child process
 hiddenimports += [
     "lego_orders_scraper", "lego_orders_webapp", "lego_orders_to_html",
-    "lego_repair_json_from_csv", "strip_non_ascii",
+    "lego_repair_json_from_csv", "strip_non_ascii", "lego_folder_picker",
     "cryptography.hazmat.primitives.ciphers.aead",
     "cryptography.hazmat.primitives.kdf.pbkdf2",
     "werkzeug.serving",

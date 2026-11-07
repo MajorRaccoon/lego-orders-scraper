@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY lego_orders_scraper.py lego_orders_webapp.py lego_orders_to_html.py \
-     lego_repair_json_from_csv.py strip_non_ascii.py ./
+     lego_repair_json_from_csv.py strip_non_ascii.py lego_folder_picker.py ./
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /data
 
