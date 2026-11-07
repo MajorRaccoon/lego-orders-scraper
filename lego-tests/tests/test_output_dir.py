@@ -110,6 +110,7 @@ if platform.system() == "Windows":
             r = subprocess.run(["powershell", "-NoProfile", "-Command", "& {" + watch + "}", str(dialog.pid), str(stand_in.pid)],
                                capture_output=True, text=True, timeout=120)
             seen = (r.stdout + r.stderr).strip()
+            time.sleep(3)   # let the dialog finish its tries and write its "front:..." note
         finally:
             dialog.kill(); stand_in.kill()
         note = dialog.communicate(timeout=30)[1]
