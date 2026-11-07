@@ -153,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "44"  # bump by 1 with every change to this script
+__version__ = "45"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.

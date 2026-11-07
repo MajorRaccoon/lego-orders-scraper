@@ -34,6 +34,13 @@ print("Folder dialog: osascript (Mac), PowerShell (Windows), zenity (Linux), non
 assert "TopMost = $true" in win[-1] and "$o.Show();" in win[-1] and "[LegoPick.Win]::Front($o.Handle)" in win[-1]
 assert win[-1].index("$o.Show();") < win[-1].index("::Front(") < win[-1].index("ShowDialog($o)") < win[-1].index("$o.Close()")
 assert "try { Add-Type" in win[-1]   # if the helper can't load, the dialog still opens
+# Every .NET library the script uses must be loaded explicitly: a real PC doesn't preload
+# System.Drawing (GitHub's machines do), and then the on-top window failed to be created.
+import re as _re
+_loaded = _re.search(r"Add-Type -AssemblyName ([\w., ]+);", win[-1]).group(1).replace(" ", "").split(",")
+for _ns in sorted(set(_re.findall(r"System\.(?:Windows\.Forms|Drawing)(?=\.)", win[-1]))):
+    assert _ns in _loaded, f"the dialog script uses {_ns} without loading it (loaded: {_loaded})"
+print("Windows: the dialog script loads every .NET library it uses: OK")
 assert "[LegoPick.Win]::FindDialog()" in win[-1] and "$t.Start()" in win[-1]   # the dialog itself is pushed forward too
 assert "$script:tries -ge 6" in win[-1] and "[LegoPick.Win]::Flash($o.Handle)" in win[-1]   # retries, then flashes its taskbar button
 assert "ShowInTaskbar = $true" in win[-1] and "Text = 'Pick ''it'''" in win[-1]   # the dialog can be found on the taskbar
@@ -108,6 +115,8 @@ if platform.system() == "Windows":
         note = dialog.communicate(timeout=30)[1]
         print(f"Windows (GitHub): {seen}; dialog note: {note.strip()!r}")
         assert r.returncode == 0, f"the folder dialog isn't on top of the other window: {seen}; {note}"
+        assert note.strip().startswith("front:") and "Exception" not in note and "Cannot find" not in note, \
+            f"the dialog script reported an error: {note}"
         print("Windows: the real folder dialog opens on top of another app: OK")
 elif platform.system() == "Darwin" and _sh.which("osacompile"):
     script = fp.folder_dialog_command(start, 'Pick "it"')[2]

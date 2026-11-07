@@ -103,7 +103,7 @@ def folder_dialog_command(start=None, prompt=DEFAULT_PROMPT, system=None):
     if system == "Windows":
         ps = (
             "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
-            "Add-Type -AssemblyName System.Windows.Forms; "
+            "Add-Type -AssemblyName System.Windows.Forms, System.Drawing; "
             "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
             f"$d.Description = {_powershell_quote(prompt)}; "
             "$d.ShowNewFolderButton = $true; "
