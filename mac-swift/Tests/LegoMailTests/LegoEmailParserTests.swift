@@ -177,6 +177,32 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(findTrackingNumbers(lines("Tracking information will follow")), [])
     }
 
+    func testReceipts() {
+        let subject = "LEGO® Shop  Receipt 5550002 from 11/01/2026"
+        XCTAssertEqual(classifyEmail(subject: subject), .confirmation)
+        XCTAssertNil(findOrderNumber(subject: subject, bodies: ["Your receipt is attached."]))
+        XCTAssertEqual(findReceiptNumber(subject: "Your LEGO receipt", bodies: ["Your receipt is attached.\nReceipt #: ab-1234"]), "AB-1234")
+        XCTAssertEqual(findReceiptNumber(subject: subject, bodies: []), "5550002")
+        XCTAssertNil(findReceiptNumber(subject: "Your receipt", bodies: ["Your receipt is attached."]))
+        XCTAssertEqual(dateInSubject(subject), "November 1, 2026")
+        XCTAssertEqual(dateInSubject("LEGO® Shop Receipt 1 from October 15, 2026"), "October 15, 2026")
+        XCTAssertNil(dateInSubject("A message from LEGO"))
+        XCTAssertTrue(isLegoOrderNumber("T514535382"))
+        XCTAssertFalse(isLegoOrderNumber("5550002"))
+
+        // A proper date label beats a bare "Date:" (e.g. a forwarded email's own header line).
+        XCTAssertEqual(findOrderDate(lines("Date: Mon, Oct 26, 2026 at 8:00 AM\nPurchase date: 10/01/2026")), "October 1, 2026")
+        XCTAssertEqual(findOrderDate(lines("Date: 11/01/2026")), "November 1, 2026")
+
+        // The PDF's text is read like the body; the order number can be only in the PDF.
+        let m = parseMail(Data("Subject: \(subject)\nFrom: LEGO Shop <noreply@e.lego.com>\n\nYour receipt is attached.".utf8))
+        let e = parseLegoEmail(m, attachmentTexts: ["Order Number: T123456789\nLEGO Icons Bonsai Tree\nItem: 10281\nQty: 1\n$49.99\nTotal $53.11"])
+        XCTAssertEqual(e?.orderNumber, "T123456789")
+        XCTAssertEqual(e?.items.map(\.name), ["LEGO Icons Bonsai Tree"])
+        XCTAssertEqual(e?.summary["total"], "53.11")
+        XCTAssertEqual(e?.orderDate, "November 1, 2026")  // from the subject
+    }
+
     func testCombiningEmailsIntoOrders() {
         func line(_ name: String, _ number: String, _ price: String?) -> LegoOrderLine {
             LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: 1,

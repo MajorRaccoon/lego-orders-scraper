@@ -16,6 +16,9 @@ public struct MailMessage {
     public var plainText: String = ""
     /// Every text/html part, decoded (still HTML), joined.
     public var htmlText: String = ""
+    /// PDF attachments (e.g. LEGO Shop receipts), as (file name, bytes). In Mail's .partial.emlx
+    /// files the bytes are stored separately: see `externalAttachments(forMailFile:)`.
+    public var pdfAttachments: [(name: String, data: Data)] = []
 
     public init() {}
 
@@ -109,10 +112,11 @@ public func parseMail(_ data: Data) -> MailMessage {
     let raw = latin1(data).replacingOccurrences(of: "\r\n", with: "\n")
     let (head, body) = splitHeadBody(raw)
     m.headers = parseHeaderBlock(head)
-    var plain: [String] = [], html: [String] = []
-    collectText(headers: m.headers, body: body, plain: &plain, html: &html, depth: 0)
-    m.plainText = plain.joined(separator: "\n\n")
-    m.htmlText = html.joined(separator: "\n")
+    var parts = CollectedParts()
+    collectText(headers: m.headers, body: body, into: &parts, depth: 0)
+    m.plainText = parts.plain.joined(separator: "\n\n")
+    m.htmlText = parts.html.joined(separator: "\n")
+    m.pdfAttachments = parts.pdfs
     return m
 }
 
@@ -167,11 +171,19 @@ private func headerValue(_ headers: [(name: String, value: String)], _ name: Str
     headers.first { $0.name == name }?.value
 }
 
+private struct CollectedParts {
+    var plain: [String] = []
+    var html: [String] = []
+    var pdfs: [(name: String, data: Data)] = []
+}
+
 private func collectText(headers: [(name: String, value: String)], body: String,
-                         plain: inout [String], html: inout [String], depth: Int) {
+                         into parts: inout CollectedParts, depth: Int) {
     guard depth < 12 else { return }
     let (type, params) = parseParams(headerValue(headers, "content-type") ?? "text/plain")
-    let (disposition, _) = parseParams(headerValue(headers, "content-disposition") ?? "")
+    let (disposition, dispParams) = parseParams(headerValue(headers, "content-disposition") ?? "")
+    let fileName = decodeEncodedWords(dispParams["filename"] ?? dispParams["filename*"].map(decodeRFC2231)
+                                      ?? params["name"] ?? "").trimmed
 
     if type.hasPrefix("multipart/"), let boundary = params["boundary"], !boundary.isEmpty {
         for part in splitMultipart(body, boundary: boundary) {
@@ -179,19 +191,50 @@ private func collectText(headers: [(name: String, value: String)], body: String,
             // A part that starts with a blank line has no headers.
             let partHeaders = part.hasPrefix("\n") ? [] : parseHeaderBlock(h)
             let partBody = part.hasPrefix("\n") ? String(part.dropFirst()) : b
-            collectText(headers: partHeaders, body: partBody, plain: &plain, html: &html, depth: depth + 1)
+            collectText(headers: partHeaders, body: partBody, into: &parts, depth: depth + 1)
         }
         return
     }
     if type == "message/rfc822" {  // a forwarded email attached whole
         let (h, b) = splitHeadBody(decodeTransfer(body, headerValue(headers, "content-transfer-encoding")).latin1String)
-        collectText(headers: parseHeaderBlock(h), body: b, plain: &plain, html: &html, depth: depth + 1)
+        collectText(headers: parseHeaderBlock(h), body: b, into: &parts, depth: depth + 1)
+        return
+    }
+    if type == "application/pdf" || fileName.lowercased().hasSuffix(".pdf") {
+        // Empty in a .partial.emlx: Mail keeps the file in its Attachments folder instead.
+        let bytes = decodeTransfer(body, headerValue(headers, "content-transfer-encoding"))
+        if !bytes.isEmpty { parts.pdfs.append((name: fileName.isEmpty ? "attachment.pdf" : fileName, data: bytes)) }
         return
     }
     guard type == "text/plain" || type == "text/html", disposition != "attachment" else { return }
     let bytes = decodeTransfer(body, headerValue(headers, "content-transfer-encoding"))
     let text = decodeCharset(bytes, params["charset"])
-    if type == "text/html" { html.append(text) } else { plain.append(text) }
+    if type == "text/html" { parts.html.append(text) } else { parts.plain.append(text) }
+}
+
+/// RFC 2231 file names: "utf-8''LEGO%C2%AE%20Receipt.pdf" -> "LEGO® Receipt.pdf".
+func decodeRFC2231(_ s: String) -> String {
+    let pieces = s.components(separatedBy: "'")
+    guard pieces.count >= 3 else { return s.removingPercentEncoding ?? s }
+    let value = pieces[2...].joined(separator: "'")
+    return value.removingPercentEncoding ?? value
+}
+
+/// PDFs that Mail saved outside a message file. For ".../Messages/12345.partial.emlx", Mail keeps
+/// the attachments in ".../Attachments/12345/<part>/<file name>".
+public func externalAttachments(forMailFile file: URL) -> [(name: String, data: Data)] {
+    let id = file.lastPathComponent.components(separatedBy: ".").first ?? ""
+    guard !id.isEmpty else { return [] }
+    let folder = file.deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Attachments", isDirectory: true).appendingPathComponent(id, isDirectory: true)
+    guard let e = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil) else { return [] }
+    var found: [(name: String, data: Data)] = []
+    var paths: [URL] = []
+    for case let url as URL in e where url.pathExtension.lowercased() == "pdf" { paths.append(url) }
+    for url in paths.sorted(by: { $0.path < $1.path }) {
+        if let data = try? Data(contentsOf: url), !data.isEmpty { found.append((name: url.lastPathComponent, data: data)) }
+    }
+    return found
 }
 
 /// The parts between "--boundary" lines (the preamble and the epilogue are dropped).

@@ -222,7 +222,7 @@ More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README
 
 ### Reading orders from Apple Mail instead
 
-**LEGO Mail Orders** is a second Mac app in the same folder. Instead of logging in to LEGO.com, it finds your LEGO Shop emails in Apple Mail: order confirmations, shipping and delivery notices, and cancellations. It saves them as `lego_mail_orders.json`, `.csv` and `.html`, in the same format. It needs **Full Disk Access** to read Mail's folder, or you can point it at emails you exported from Mail.
+**LEGO Mail Orders** is a second Mac app in the same folder. Instead of logging in to LEGO.com, it finds your LEGO Shop emails in Apple Mail: order confirmations, PDF receipts, shipping and delivery notices, and cancellations. It saves them as `lego_mail_orders.json`, `.csv` and `.html`, in the same format. It needs **Full Disk Access** to read Mail's folder, or you can point it at emails you exported from Mail.
 
 ```bash
 cd mac-swift

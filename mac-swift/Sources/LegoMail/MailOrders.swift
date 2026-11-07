@@ -95,7 +95,10 @@ func buildOrder(_ number: String, _ emails: [LegoEmail], timeZone: TimeZone) -> 
 
     let itemCount: Int? = items.isEmpty ? nil : items.reduce(0) { $0 + ($1.quantity ?? 1) }
     return LegoOrder(orderNumber: number, status: orderStatus, orderDate: orderDate, total: summary["total"],
-                     itemCountListed: itemCount, url: orderDetailURL(number), items: items, summary: summary)
+                     itemCountListed: itemCount,
+                     // A receipt saved under its receipt number has no order page: link to My Orders.
+                     url: isLegoOrderNumber(number) ? orderDetailURL(number) : ordersURL,
+                     items: items, summary: summary)
 }
 
 /// This run's orders first (newest first), then orders saved by an earlier run that weren't

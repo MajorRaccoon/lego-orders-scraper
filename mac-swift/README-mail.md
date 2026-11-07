@@ -1,6 +1,6 @@
 # LEGO Mail Orders — read your LEGO orders from Apple Mail
 
-A native Mac app (Swift/SwiftUI) that finds your LEGO Shop emails in **Apple Mail** and turns them into an order history. It reads order confirmations, shipping and delivery notices, cancellations and refunds, and saves the same kind of files as the LEGO.com scraper.
+A native Mac app (Swift/SwiftUI) that finds your LEGO Shop emails in **Apple Mail** and turns them into an order history. It reads order confirmations, **PDF receipts**, shipping and delivery notices, cancellations and refunds, and saves the same kind of files as the LEGO.com scraper.
 
 - **No login, no browser.** It reads the emails already on your Mac. Nothing is sent anywhere.
 - **Read-only.** It never changes, moves or marks your emails.
@@ -69,12 +69,21 @@ How one order is built from its emails:
 - The same email in two mailboxes (for example Gmail's Inbox and All Mail) is counted once.
 - A forwarded copy of a LEGO email is read too.
 
+### PDF receipts
+
+Emails such as "LEGO® Shop Receipt *(receipt number)* from *(date)*" carry the order details in an attached PDF. The app reads the PDF's text with macOS's built-in PDFKit, the same way it reads an email's text, and uses whichever gives the most detail:
+
+- Mail sometimes keeps big attachments outside the email file (for `.partial.emlx` messages, in an `Attachments` folder next to them). The app looks there too.
+- An online order's receipt is merged with the order's other emails by its order number (`T…`).
+- A receipt with no LEGO order number (for example from a LEGO Store) is saved under its **receipt number**, dated from the receipt or the subject. Its "View on LEGO.com" link opens My Orders.
+- A scanned PDF (a picture, with no text in it) can't be read. The log counts these as "PDF(s) with no readable text".
+
 ## If orders come out wrong
 
 LEGO doesn't publish the layout of its emails, and it changes from time to time. The app looks for labels such as "Order Number", "Item:", "Qty", "Subtotal" and "Tracking number" anywhere in an email, so it handles many layouts. It can still miss an item or a price in a layout it hasn't seen. To help fix it:
 
 1. Turn on **Save matched emails for troubleshooting** and click **Start**.
-2. Click **Show saved email text**. Each file is named `date_order-number_kind_N.txt`. It starts with **What the app read** (items, prices, status), followed by the email's text.
+2. Click **Show saved email text**. Each file is named `date_order-number_kind_N.txt`. It starts with **What the app read** (items, prices, status), followed by the email's text and the text of any PDF receipt.
 3. Send the files for the emails that came out wrong. **They contain your name, address and order details**, so blank those out or share only with someone you trust.
 
 The rules are in `Sources/LegoMail/LegoEmailParser.swift`. Each one has unit tests in `Tests/LegoMailTests/`.
@@ -89,7 +98,10 @@ swift run lego-mail --help
 swift run lego-mail                                   # read ~/Library/Mail
 swift run lego-mail --mail-dir ~/Desktop/lego-emails  # read exported .eml / .mbox files
 swift run lego-mail --mail-dir sample-mail --output-dir /tmp/lego-test   # the made-up sample mailbox
+swift run lego-mail --read-pdf ~/Downloads/Receipt.pdf  # check one PDF receipt
 ```
+
+`--read-pdf` reads a single PDF receipt and prints its text and what the app got from it (number, date, totals, items). It doesn't touch your mail and saves nothing, so it's a quick way to check a receipt before sharing anything.
 
 To read `~/Library/Mail` from Terminal, give **Terminal** Full Disk Access (same steps as above).
 
@@ -98,7 +110,8 @@ To read `~/Library/Mail` from Terminal, give **Terminal** Full Disk Access (same
 ```
 mac-swift/
   Sources/LegoMail/            no UI: reads the mail files and builds the orders
-    MailMessage.swift          .emlx / .eml / .mbox files, headers, MIME parts, encodings
+    MailMessage.swift          .emlx / .eml / .mbox files, headers, MIME parts, encodings, PDF attachments
+    PDFText.swift              text of a PDF receipt (PDFKit)
     HTMLText.swift             HTML email -> one line per table cell / paragraph
     LegoEmailParser.swift      is it a LEGO order email? order number, kind, items, summary, tracking
     MailOrders.swift           combines an order's emails into one LegoOrder

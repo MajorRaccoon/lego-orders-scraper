@@ -114,14 +114,17 @@ jobs:
           orders = json.load(open(sys.argv[1]))
           nums = [o["order_number"] for o in orders]
           print("orders:", nums)
-          assert nums == ["T100000003", "T100000002", "T100000001", "T099999999"], nums
-          t1 = orders[2]
+          assert nums == ["5550002", "T100000003", "T100000004", "T100000002", "T100000001", "T099999999"], nums
+          t1 = orders[4]
           assert t1["status"] == "Delivered" and t1["total"] == "808.72", t1
           assert [i["item_number"] for i in t1["items"]] == ["10294", "88012", "5008000"], t1["items"]
           PY
           test -s "$OUT/lego_mail_orders.csv"
           test -s "$OUT/lego_mail_orders.html"
           ls "$OUT/text"
+          # The receipt PDF that Mail keeps in its Attachments folder is read by PDFKit.
+          swift run -c release lego-mail --read-pdf "sample-mail/Mail/V10/00000000-SAMPLE-ACCOUNT/INBOX.mbox/11111111-SAMPLE/Data/Attachments/1007/2/Receipt 5550002.pdf" | tee "$OUT/read-pdf.txt"
+          grep -q "LEGO Technic Lamborghini Sian | number 42115" "$OUT/read-pdf.txt"
 
       - uses: actions/upload-artifact@v4
         if: always()

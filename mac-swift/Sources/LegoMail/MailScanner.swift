@@ -58,6 +58,9 @@ public struct MailScanResult {
     /// Emails that looked like LEGO order emails but had no order number in them.
     public var withoutOrderNumber = 0
     public var unreadable = 0
+    /// PDF attachments (receipts) whose text was read, and ones that had no readable text.
+    public var pdfsRead = 0
+    public var pdfsUnreadable = 0
 }
 
 /// Every mail file under `folder` (.emlx, .eml, mbox), in a stable order.
@@ -113,16 +116,28 @@ public func scanMail(_ o: MailScanOptions, stop: StopFlag = StopFlag(), log: (St
             let id = message.messageID ?? "\(file.path)#\(message.subject)#\(message.header("Date") ?? "")"
             guard seenIDs.insert(id).inserted else { continue }
 
-            let email = parseLegoEmail(message, source: file.path)
+            // PDF receipts: inside the email, or (for Mail's .partial.emlx files) in Mail's
+            // Attachments folder next to it.
+            var pdfs = message.pdfAttachments
+            if pdfs.isEmpty, kind == .emlx { pdfs = externalAttachments(forMailFile: file) }
+            var pdfTexts: [(name: String, text: String)] = []
+            for pdf in pdfs {
+                if let text = pdfText(pdf.data) { pdfTexts.append((name: pdf.name, text: text)); result.pdfsRead += 1 }
+                else { result.pdfsUnreadable += 1 }
+            }
+
+            let email = parseLegoEmail(message, source: file.path, attachmentTexts: pdfTexts.map(\.text))
             if let email { result.emails.append(email) } else { result.withoutOrderNumber += 1 }
             if let dir = o.saveTextDir {
                 saved += 1
-                saveEmailText(message, email, file: file, number: saved, to: dir)
+                saveEmailText(message, email, pdfTexts: pdfTexts, file: file, number: saved, to: dir)
             }
         }
     }
     var summary = "Checked \(result.messagesChecked) email(s): \(result.emails.count) LEGO order email(s) found"
     if result.withoutOrderNumber > 0 { summary += ", \(result.withoutOrderNumber) LEGO email(s) without an order number skipped" }
+    if result.pdfsRead > 0 { summary += ", \(result.pdfsRead) PDF receipt(s) read" }
+    if result.pdfsUnreadable > 0 { summary += ", \(result.pdfsUnreadable) PDF(s) with no readable text" }
     if result.unreadable > 0 { summary += ", \(result.unreadable) file(s) couldn't be read" }
     log(summary + ".")
     if let dir = o.saveTextDir, saved > 0 { log("Saved the text of \(saved) email(s) in \(dir.path)") }
@@ -142,7 +157,8 @@ private func readPrefix(_ url: URL, bytes: Int) -> Data? {
 
 /// Troubleshooting copy of one email: its headers, both text versions, and what was read from it.
 /// Contains order details and your address, so share it only with someone you trust.
-func saveEmailText(_ m: MailMessage, _ email: LegoEmail?, file: URL, number: Int, to dir: URL) {
+func saveEmailText(_ m: MailMessage, _ email: LegoEmail?, pdfTexts: [(name: String, text: String)] = [],
+                   file: URL, number: Int, to dir: URL) {
     let day = m.date.map { d -> String in
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.string(from: d)
     } ?? "undated"
@@ -173,9 +189,10 @@ func saveEmailText(_ m: MailMessage, _ email: LegoEmail?, file: URL, number: Int
             out += row + "\n"
         }
     } else {
-        out += "No LEGO order number found, so this email was skipped.\n"
+        out += "No LEGO order or receipt number found, so this email was skipped.\n"
     }
     out += "\n===== Plain-text part =====\n\n" + (m.plainText.trimmed.isEmpty ? "(none)" : m.plainText)
     out += "\n\n===== HTML part, as text =====\n\n" + (m.htmlText.isEmpty ? "(none)" : htmlToText(m.htmlText)) + "\n"
+    for pdf in pdfTexts { out += "\n===== PDF attachment \(pdf.name), as text =====\n\n\(pdf.text)\n" }
     try? out.write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
 }

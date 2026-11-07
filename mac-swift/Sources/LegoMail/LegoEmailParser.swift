@@ -77,15 +77,17 @@ public func looksLikeLegoOrderEmail(_ m: MailMessage) -> Bool {
 
 // MARK: Reading one email
 
-/// Read one email. nil if it has no LEGO order number (e.g. a newsletter).
-public func parseLegoEmail(_ m: MailMessage, source: String = "") -> LegoEmail? {
+/// Read one email. nil if it has no LEGO order or receipt number (e.g. a newsletter).
+/// `attachmentTexts`: the text of its PDF attachments (LEGO Shop receipts), read like the body.
+public func parseLegoEmail(_ m: MailMessage, source: String = "", attachmentTexts: [String] = []) -> LegoEmail? {
     let subject = m.subject
-    // Read both versions of the body. Many emails' plain-text part is a stripped-down copy,
-    // so use whichever one gives more item detail.
+    // Read every version of the content: the HTML and plain-text bodies and any PDF receipt.
+    // Use whichever one gives the most item detail (often the PDF, when there is one).
     let plain = m.plainText.trimmed.isEmpty ? "" : m.plainText
     let html = m.htmlText.isEmpty ? "" : htmlToText(m.htmlText)
-    let candidates = [html, plain].filter { !$0.isEmpty }
-    guard let number = findOrderNumber(subject: subject, bodies: candidates) else { return nil }
+    let candidates = ([html, plain] + attachmentTexts).filter { !$0.trimmed.isEmpty }
+    guard let number = findOrderNumber(subject: subject, bodies: candidates)
+        ?? findReceiptNumber(subject: subject, bodies: candidates) else { return nil }
 
     var best: (items: [LegoOrderLine], summary: OrderedStrings, text: String)?
     for text in candidates {
@@ -104,7 +106,7 @@ public func parseLegoEmail(_ m: MailMessage, source: String = "") -> LegoEmail? 
         kind: classifyEmail(subject: subject, body: lines),
         subject: subject,
         sentDate: m.date,
-        orderDate: findOrderDate(cleanLines(allText)),
+        orderDate: findOrderDate(cleanLines(allText)) ?? dateInSubject(subject),
         items: best?.items ?? [],
         summary: best?.summary ?? OrderedStrings(),
         trackingNumbers: findTrackingNumbers(cleanLines(allText)),
@@ -126,6 +128,26 @@ public func findOrderNumber(subject: String, bodies: [String]) -> String? {
         if let m = MRx.search(strong, body, caseInsensitive: false), let n = m[1] { return n }
     }
     return nil
+}
+
+/// A receipt with no LEGO order number (e.g. from a LEGO Store) is saved under its receipt
+/// number: "LEGO® Shop Receipt 5550002 from 11/01/2026" or "Receipt number: 5550002".
+public func findReceiptNumber(subject: String, bodies: [String]) -> String? {
+    let pattern = "receipt\\s*(?:number|no\\.?|#|id)?\\s*[:#]?\\s*([A-Z0-9][A-Z0-9-]{3,30})\\b"
+    for text in [subject] + bodies {
+        // Every "receipt ..." in the text, not just the first ("Your receipt is attached").
+        for n in MRx.findAll(pattern, text) where MRx.search("\\d", n) != nil { return n.uppercased() }
+    }
+    return nil
+}
+
+/// True for a LEGO.com order number (T + digits), which has its own page on LEGO.com.
+public func isLegoOrderNumber(_ s: String) -> Bool { MRx.search("^T\\d{6,12}$", s, caseInsensitive: false) != nil }
+
+/// The date at the end of a subject like "LEGO® Shop Receipt 5550002 from November 1, 2026".
+public func dateInSubject(_ subject: String) -> String? {
+    guard let m = MRx.search("\\b(?:from|on|dated)\\s+(.+?)\\s*$", subject), let d = m[1] else { return nil }
+    return normalizeDate(d)
 }
 
 /// Which kind of email this is, from its subject (or, failing that, the first lines of the body).
@@ -338,15 +360,21 @@ public func parseEmailSummary(_ lines: [String]) -> OrderedStrings {
     return result
 }
 
-/// "Order date: September 7, 2026" (or "Order placed: 09/07/2026", "Date ordered 7 Sep 2026")
+/// "Order date: September 7, 2026" (or "Order placed: 09/07/2026", "Date ordered 7 Sep 2026",
+/// "Purchase date: ...", "Date: ..." on a receipt)
 /// -> "September 7, 2026", the format the LEGO.com scraper saves. nil if there's no such line.
 public func findOrderDate(_ lines: [String]) -> String? {
-    for (i, line) in lines.enumerated() {
-        guard let m = MRx.search("^(?:order\\s*date|date\\s*ordered|order\\s*placed(?:\\s*on)?|placed\\s*on|date\\s*placed)\\s*[:]?\\s*(.*)$", line)
-        else { continue }
-        var value = (m[1] ?? "").trimmed
-        if value.isEmpty, i + 1 < lines.count { value = lines[i + 1] }
-        if let d = normalizeDate(value) { return d }
+    let labelled = "^(?:order\\s*date|date\\s*ordered|order\\s*placed(?:\\s*on)?|placed\\s*on|date\\s*placed|"
+        + "(?:receipt|purchase|transaction|sale)\\s*date|date\\s*of\\s*purchase)\\s*[:]?\\s*(.*)$"
+    // A bare "Date:" only counts when nothing better is there (a forwarded email's own
+    // "Date:" header line would otherwise win).
+    for pattern in [labelled, "^date\\s*:\\s*(.*)$"] {
+        for (i, line) in lines.enumerated() {
+            guard let m = MRx.search(pattern, line) else { continue }
+            var value = (m[1] ?? "").trimmed
+            if value.isEmpty, i + 1 < lines.count { value = lines[i + 1] }
+            if let d = normalizeDate(value) { return d }
+        }
     }
     return nil
 }

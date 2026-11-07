@@ -105,6 +105,51 @@ final class MailMessageTests: XCTestCase {
         XCTAssertTrue(m.plainText.contains("Order Number: T123456789"))
     }
 
+    func testPDFAttachments() throws {
+        let pdf = Data("%PDF-1.4 fake".utf8).base64EncodedString()
+        let m = mail("""
+        Content-Type: multipart/mixed; boundary=X
+
+        --X
+        Content-Type: text/plain
+
+        Receipt attached
+        --X
+        Content-Type: application/pdf; name="r.pdf"
+        Content-Disposition: attachment; filename*=utf-8''LEGO%C2%AE%20Receipt.pdf
+        Content-Transfer-Encoding: base64
+
+        \(pdf)
+        --X
+        Content-Type: application/octet-stream
+        Content-Disposition: attachment; filename="Other.PDF"
+
+        raw
+        --X
+        Content-Type: application/pdf; name="kept-outside.pdf"
+        Content-Transfer-Encoding: base64
+
+        --X--
+        """)
+        XCTAssertEqual(m.pdfAttachments.map(\.name), ["LEGO® Receipt.pdf", "Other.PDF"])  // the empty one is skipped
+        XCTAssertEqual(m.pdfAttachments.first?.data, Data("%PDF-1.4 fake".utf8))
+        XCTAssertEqual(m.plainText.trimmed, "Receipt attached")
+        XCTAssertNil(pdfText(Data("not a pdf".utf8)))
+
+        // Mail's layout for attachments kept outside the message file.
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("lego-att-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let messages = tmp.appendingPathComponent("Messages")
+        let folder = tmp.appendingPathComponent("Attachments/77/2")
+        try FileManager.default.createDirectory(at: messages, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("pdf bytes".utf8).write(to: folder.appendingPathComponent("Receipt.pdf"))
+        try Data("x".utf8).write(to: folder.appendingPathComponent("logo.png"))
+        let found = externalAttachments(forMailFile: messages.appendingPathComponent("77.partial.emlx"))
+        XCTAssertEqual(found.map(\.name), ["Receipt.pdf"])
+        XCTAssertTrue(externalAttachments(forMailFile: messages.appendingPathComponent("78.partial.emlx")).isEmpty)
+    }
+
     func testAccessCheck() {
         XCTAssertEqual(checkMailAccess(URL(fileURLWithPath: "/no/such/folder")), .notFound("/no/such/folder"))
         XCTAssertNil(checkMailAccess(FileManager.default.temporaryDirectory))
