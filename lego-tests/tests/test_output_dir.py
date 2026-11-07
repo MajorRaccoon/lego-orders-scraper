@@ -29,6 +29,13 @@ with mock.patch.object(fp.shutil, "which", return_value="/usr/bin/zenity"):
     assert fp.folder_dialog_command(start, system="Linux")[:3] == ["zenity", "--file-selection", "--directory"]
 print("Folder dialog: osascript (Mac), PowerShell (Windows), zenity (Linux), none otherwise; paths quoted safely: OK")
 
+# Windows: the dialog is owned by a shown, always-on-top window pushed to the front,
+# so it opens on top of the browser (not behind it); the owner is closed afterwards.
+assert "TopMost = $true" in win[-1] and "$o.Show();" in win[-1] and "[LegoPick.Win]::Front($o.Handle)" in win[-1]
+assert win[-1].index("$o.Show();") < win[-1].index("::Front(") < win[-1].index("ShowDialog($o)") < win[-1].index("$o.Close()")
+assert "try { Add-Type" in win[-1]   # if the helper can't load, the dialog still opens
+print("Windows: folder dialog is brought in front of the browser: OK")
+
 # On a real system, check the dialog script is valid WITHOUT showing it.
 import platform, shutil as _sh
 if platform.system() == "Windows":
@@ -38,6 +45,14 @@ if platform.system() == "Windows":
     r = subprocess.run(["powershell", "-NoProfile", "-Command", check], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     print("Windows: the folder dialog's PowerShell script parses cleanly: OK")
+    # The bring-to-front helper compiles and runs (passed the same way the real command is).
+    front = ("Add-Type -AssemblyName System.Windows.Forms; "
+             f"Add-Type -Namespace LegoPick -Name Win -MemberDefinition {fp._powershell_quote(fp._WIN_FRONT_CS)}; "
+             "$o = New-Object System.Windows.Forms.Form -Property @{Opacity = 0; ShowInTaskbar = $false}; "
+             "$o.Show(); [LegoPick.Win]::Front($o.Handle); $o.Close(); [Console]::Out.Write('front-ok')")
+    r = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", front], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0 and "front-ok" in r.stdout, r.stdout + r.stderr
+    print("Windows: the bring-to-front helper compiles and runs: OK")
 elif platform.system() == "Darwin" and _sh.which("osacompile"):
     script = fp.folder_dialog_command(start, 'Pick "it"')[2]
     r = subprocess.run(["osacompile", "-e", script, "-o", str(sandbox / "pick.scpt")], capture_output=True, text=True)

@@ -35,6 +35,25 @@ def _powershell_quote(s):
     return "'" + str(s).replace("'", "''") + "'"
 
 
+# Windows won't let a background process (our web server) put its window in front
+# of the browser. Joining the foreground window's input thread for a moment lifts that
+# restriction, so the folder dialog opens on top instead of behind the browser.
+_WIN_FRONT_CS = (
+    '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); '
+    '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr p); '
+    '[DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId(); '
+    '[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach); '
+    '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); '
+    '[DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h); '
+    "public static void Front(IntPtr h) { "
+    "uint fg = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero); "
+    "uint me = GetCurrentThreadId(); "
+    "bool joined = fg != 0 && fg != me && AttachThreadInput(me, fg, true); "
+    "BringWindowToTop(h); SetForegroundWindow(h); "
+    "if (joined) { AttachThreadInput(me, fg, false); } }"
+)
+
+
 def folder_dialog_command(start=None, prompt=DEFAULT_PROMPT, system=None):
     """The command that shows a folder dialog on this OS (opening at `start`
     if it's an existing folder), or None when no dialog is available."""
@@ -53,10 +72,18 @@ def folder_dialog_command(start=None, prompt=DEFAULT_PROMPT, system=None):
             f"$d.Description = {_powershell_quote(prompt)}; "
             "$d.ShowNewFolderButton = $true; "
             + (f"$d.SelectedPath = {_powershell_quote(start)}; " if start else "")
-            # An invisible always-on-top owner keeps the dialog in front of the browser.
-            + "$o = New-Object System.Windows.Forms.Form -Property @{TopMost = $true}; "
-            "if ($d.ShowDialog($o) -eq [System.Windows.Forms.DialogResult]::OK) "
-            "{ [Console]::Out.Write($d.SelectedPath) }"
+            # A tiny invisible always-on-top window, shown and pushed to the front, owns the
+            # dialog so the dialog opens on top of the browser (and centered on screen).
+            + "$o = New-Object System.Windows.Forms.Form -Property @{TopMost = $true; "
+            "ShowInTaskbar = $false; FormBorderStyle = 'None'; Opacity = 0; "
+            "StartPosition = 'CenterScreen'; Size = New-Object System.Drawing.Size(1, 1)}; "
+            "$o.Show(); "
+            f"try {{ Add-Type -Namespace LegoPick -Name Win -MemberDefinition {_powershell_quote(_WIN_FRONT_CS)}; "
+            "[LegoPick.Win]::Front($o.Handle) } catch { }; "
+            "$o.Activate(); "
+            "$ok = $d.ShowDialog($o) -eq [System.Windows.Forms.DialogResult]::OK; "
+            "$o.Close(); "
+            "if ($ok) { [Console]::Out.Write($d.SelectedPath) }"
         )
         return ["powershell", "-NoProfile", "-STA", "-Command", ps]
     if shutil.which("zenity"):
