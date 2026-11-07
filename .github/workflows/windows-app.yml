@@ -1,6 +1,8 @@
-# Builds the Windows app (windows-app/) on a Windows machine and checks that it works:
-# the .exe starts, its bundled browser driver downloads and drives Chromium, and the
-# web server answers. The zip is attached to the run as "LEGO-Order-Scraper-windows".
+# Builds the Windows app (windows-app/) for x64 and arm64, each on a matching Windows
+# machine, and checks that it works: the tests pass, the .exe is for the right CPU, it
+# starts, its bundled browser driver downloads and drives Chromium, and the web server
+# answers. The zips are attached to the run as "LEGO-Order-Scraper-windows-x64" and
+# "LEGO-Order-Scraper-windows-arm64".
 # Runs when the Windows app's files change, or on demand (Actions tab -> "Run workflow").
 name: Windows app
 
@@ -14,7 +16,16 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    name: build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false  # one architecture failing must not cancel the other
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     env:
       PYTHONUTF8: "1"
@@ -24,6 +35,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          architecture: ${{ matrix.arch }}
+
+      - name: Show the machine and Python
+        run: python -c "import platform, sys; print(platform.machine(), sys.version)"
 
       - name: Install build requirements
         run: python -m pip install -r windows-app/requirements-windows.txt
@@ -38,6 +53,10 @@ jobs:
       - name: Build the app
         working-directory: windows-app
         run: pyinstaller --noconfirm --clean LEGO_Order_Scraper_win.spec
+
+      - name: Check - the app is built for ${{ matrix.arch }}
+        working-directory: windows-app
+        run: python check_exe_arch.py ${{ matrix.arch }} "dist/LEGO Order Scraper"
 
       - name: Check - the app starts and reports the scraper version
         working-directory: windows-app
@@ -77,10 +96,10 @@ jobs:
       - name: Zip
         working-directory: windows-app
         shell: pwsh
-        run: Compress-Archive -Force -Path "dist\LEGO Order Scraper" -DestinationPath "dist\LEGO-Order-Scraper-windows.zip"
+        run: Compress-Archive -Force -Path "dist\LEGO Order Scraper" -DestinationPath "dist\LEGO-Order-Scraper-windows-${{ matrix.arch }}.zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: LEGO-Order-Scraper-windows
-          path: windows-app/dist/LEGO-Order-Scraper-windows.zip
+          name: LEGO-Order-Scraper-windows-${{ matrix.arch }}
+          path: windows-app/dist/LEGO-Order-Scraper-windows-${{ matrix.arch }}.zip
           retention-days: 30

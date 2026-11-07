@@ -6,11 +6,18 @@ It's the Python version packaged with [PyInstaller](https://pyinstaller.org/). I
 
 ## Get it
 
-The app is built automatically on GitHub's Windows build server whenever its files change:
+There are two versions; pick the one for your PC:
+
+- **x64**: most Windows PCs (Intel or AMD processors).
+- **arm64**: Windows on ARM PCs, such as Snapdragon laptops. The x64 version also runs on Windows 11 on ARM through emulation, just more slowly.
+
+To check, open **Settings → System → About** and look at **System type**.
+
+The easiest place to get them is the repo's **Releases** page. They're also built automatically on GitHub's Windows build servers whenever the app's files change:
 
 1. On GitHub, open the repo's **Actions** tab, then the **Windows app** workflow.
 2. Click the latest successful run (green check).
-3. Under **Artifacts**, download **LEGO-Order-Scraper-windows**. You get a zip that contains `LEGO-Order-Scraper-windows.zip`.
+3. Under **Artifacts**, download **LEGO-Order-Scraper-windows-x64** or **LEGO-Order-Scraper-windows-arm64**. Each is a zip that contains the app's zip.
 
 To build a new one on demand, click **Run workflow** on that page. Artifacts are kept for 30 days.
 
@@ -46,10 +53,10 @@ Share the zip. It contains none of your data or login: those stay in your own `%
   cd windows-app
   powershell -ExecutionPolicy Bypass -File build_windows.ps1
   ```
-  The result is `windows-app\dist\LEGO-Order-Scraper-windows.zip`. It can't be built on a Mac: PyInstaller only builds for the system it runs on.
+  The result is `windows-app\dist\LEGO-Order-Scraper-windows-x64.zip` or `-arm64.zip`, matching the PC's CPU (and the Python installed). It can't be built on a Mac: PyInstaller only builds for the system it runs on.
 - The scripts in this folder are copies. The repo root is the source of truth, and `lego_orders_app.py` comes from `mac-app/`. Run `./sync_copies.sh` after editing; a test fails if a copy is out of date.
 - Debug options:
   - `"LEGO Order Scraper.exe" --serve-only` runs just the server.
   - `--run-scraper --help` shows the scraper's own options.
   - `--self-test` downloads Chromium if needed, opens a page with it, and prints `SELF-TEST OK`.
-- The GitHub Actions workflow (`.github/workflows/windows-app.yml`) builds the app, then checks it: `--version`, `--self-test`, and the web server answering. Only then does it attach the zip.
+- The GitHub Actions workflow (`.github/workflows/windows-app.yml`) builds the app twice, x64 and arm64, each on a matching Windows machine. It then checks each one: the tests, the CPU type of its `.exe` files (`check_exe_arch.py`), `--version`, `--self-test`, and the web server answering. Only then does it attach the zip.

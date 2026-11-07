@@ -224,9 +224,9 @@ More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README
 
 ## 5. Windows app
 
-A double-clickable Windows app (Windows 10 or 11). It's the web UI packaged with its own Python, so there's nothing to install. It opens in your default browser, and a small console window shows progress. Files are in [`windows-app/`](windows-app/).
+A double-clickable Windows app (Windows 10 or 11), built for both x64 PCs and ARM (arm64) PCs. It's the web UI packaged with its own Python, so there's nothing to install. It opens in your default browser, and a small console window shows progress. Files are in [`windows-app/`](windows-app/).
 
-- **Get it:** GitHub's Windows build server builds it automatically. Download **LEGO-Order-Scraper-windows** from the latest run of the **Windows app** workflow on the repo's **Actions** tab.
+- **Get it:** from the repo's **Releases** page, or from the latest run of the **Windows app** workflow on the **Actions** tab. Choose **x64** for most PCs (Intel or AMD), or **arm64** for Windows on ARM (for example Snapdragon laptops).
 - **Use it:** unzip it, keep the folder together, and double-click **LEGO Order Scraper.exe**. If SmartScreen warns, click **More info → Run anyway**.
 - Data and log: `%LOCALAPPDATA%\LEGO Order Scraper\`. To save the files elsewhere, use **Save files to → Browse…** on the page. Quit with **Quit app** on the page, or by closing the console window.
 

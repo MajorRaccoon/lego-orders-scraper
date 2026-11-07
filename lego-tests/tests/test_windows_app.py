@@ -87,9 +87,20 @@ assert "win32crypt" in spec and '"webview"' in spec   # pywin32 bundled; pywebvi
 reqs = (WIN / "requirements-windows.txt").read_text()
 assert all(p in reqs for p in ("playwright", "cryptography", "flask", "pywin32", "pyinstaller", "pillow"))
 wf = (ROOT / ".github" / "workflows" / "windows-app.yml").read_text()
-assert "runs-on: windows-latest" in wf and "--self-test" in wf and "--serve-only" in wf
-assert "upload-artifact" in wf and "LEGO-Order-Scraper-windows.zip" in wf and "${{ runner." not in wf.split("steps:")[0]
-print("Windows build spec, requirements and GitHub Actions workflow are consistent: OK")
+assert "runner: windows-latest" in wf and "runner: windows-11-arm" in wf and "fail-fast: false" in wf
+assert "--self-test" in wf and "--serve-only" in wf and "check_exe_arch.py ${{ matrix.arch }}" in wf
+assert "upload-artifact" in wf and "LEGO-Order-Scraper-windows-${{ matrix.arch }}.zip" in wf
+assert "${{ runner." not in wf.split("steps:")[0]
+sys.path.insert(0, str(WIN))
+import check_exe_arch
+import struct
+fake = sandbox / "fake.exe"
+for code, name in ((0x8664, "x64"), (0xAA64, "arm64")):
+    hdr = bytearray(512); hdr[0:2] = b"MZ"; struct.pack_into("<I", hdr, 0x3C, 0x80)
+    hdr[0x80:0x84] = b"PE\0\0"; struct.pack_into("<H", hdr, 0x84, code)
+    fake.write_bytes(bytes(hdr))
+    assert check_exe_arch.machine_of(fake) == name
+print("Windows build spec, requirements and workflow (x64 + arm64, CPU check) are consistent: OK")
 
 # --- every copy matches its source (a stale copy would be built into an app) --
 copies = {d: ["lego_orders_scraper.py", "lego_orders_webapp.py", "lego_orders_to_html.py",
