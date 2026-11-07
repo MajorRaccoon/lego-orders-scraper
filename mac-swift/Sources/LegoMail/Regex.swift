@@ -40,8 +40,8 @@ enum MRx {
     }
 }
 
-extension String {
-    /// Trimmed of spaces, tabs, newlines and non-breaking spaces.
+extension StringProtocol {
+    /// Trimmed of spaces, tabs, newlines and non-breaking spaces. Works on String and Substring.
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{A0}\u{200B}\u{FEFF}"))) }
 }
 
