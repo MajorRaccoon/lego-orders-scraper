@@ -3,6 +3,9 @@
 # (Apple Silicon + Intel), its version and signature are right, and it starts and reads a
 # test page in its built-in browser. The zip is attached to the run as
 # "LEGO-Order-Scraper-macOS".
+# It also builds the Apple Mail reader ("LEGO Mail Orders", same Swift package) and checks that
+# its command-line version reads the made-up mailbox in mac-swift/sample-mail. Its zip is
+# attached as "LEGO-Mail-Orders-macOS".
 # Runs when the Mac app's files (or the Python scripts it must match) change, or on demand
 # (Actions tab -> "Run workflow").
 name: macOS app
@@ -84,6 +87,42 @@ jobs:
           grep -q "Order Number: T123456789" "$OUT/main-text.txt" || { echo "the app didn't read the test page"; exit 1; }
           grep -q "^title: Self-check page" "$OUT/state.txt"
 
+      - name: Build the Mail app (LEGO Mail Orders)
+        working-directory: mac-swift
+        run: ./build_mail_app.sh
+
+      - name: Check - the Mail app is universal, the right version, and properly signed
+        working-directory: mac-swift
+        run: |
+          APP="dist/LEGO Mail Orders.app"
+          archs=$(lipo -archs "$APP/Contents/MacOS/LEGO Mail Orders")
+          echo "architectures: $archs"
+          [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]] || { echo "not universal: $archs"; exit 1; }
+          want=$(sed -n 's/^public let legoMailVersion = "\(.*\)"/\1/p' Sources/LegoMail/Version.swift)
+          got=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
+          echo "version: $got (source says $want)"
+          [[ -n "$want" && "$got" == "$want" ]] || { echo "version mismatch"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Check - lego-mail reads the sample mailbox
+        working-directory: mac-swift
+        run: |
+          OUT="$RUNNER_TEMP/mail-out"
+          swift run -c release lego-mail --mail-dir sample-mail --output-dir "$OUT" --save-email-text "$OUT/text"
+          python3 - "$OUT/lego_mail_orders.json" <<'PY'
+          import json, sys
+          orders = json.load(open(sys.argv[1]))
+          nums = [o["order_number"] for o in orders]
+          print("orders:", nums)
+          assert nums == ["T100000003", "T100000002", "T100000001", "T099999999"], nums
+          t1 = orders[2]
+          assert t1["status"] == "Delivered" and t1["total"] == "808.72", t1
+          assert [i["item_number"] for i in t1["items"]] == ["10294", "88012", "5008000"], t1["items"]
+          PY
+          test -s "$OUT/lego_mail_orders.csv"
+          test -s "$OUT/lego_mail_orders.html"
+          ls "$OUT/text"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -96,4 +135,10 @@ jobs:
         with:
           name: LEGO-Order-Scraper-macOS
           path: mac-swift/dist/LEGO-Order-Scraper-native-mac.zip
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LEGO-Mail-Orders-macOS
+          path: mac-swift/dist/LEGO-Mail-Orders-mac.zip
           retention-days: 30

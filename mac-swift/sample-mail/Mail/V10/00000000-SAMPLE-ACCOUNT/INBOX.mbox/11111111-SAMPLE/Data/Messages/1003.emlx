@@ -1,0 +1,19 @@
+325
+From: LEGO Shop <noreply@e.lego.com>
+To: customer@example.invalid
+Subject: Your LEGO order has been delivered
+Date: Mon, 14 Sep 2026 16:00:00 -0400
+Message-ID: <delivered-T100000001@e.lego.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+
+Your package was delivered today.
+Order number: T100000001
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>flags</key>
+	<integer>8590195713</integer>
+</dict>
+</plist>

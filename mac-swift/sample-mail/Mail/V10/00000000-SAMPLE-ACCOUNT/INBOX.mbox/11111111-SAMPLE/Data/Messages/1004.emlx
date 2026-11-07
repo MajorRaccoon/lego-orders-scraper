@@ -1,0 +1,18 @@
+300
+From: LEGO <news@e.lego.com>
+To: customer@example.invalid
+Subject: Pre-order the newest LEGO Icons set today
+Date: Tue, 1 Sep 2026 12:00:00 +0000
+Message-ID: <news-2026-09@e.lego.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Be the first to build it. Shop now at LEGO.com.
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>flags</key>
+	<integer>8590195713</integer>
+</dict>
+</plist>
