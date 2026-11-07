@@ -34,6 +34,8 @@ print("Folder dialog: osascript (Mac), PowerShell (Windows), zenity (Linux), non
 assert "TopMost = $true" in win[-1] and "$o.Show();" in win[-1] and "[LegoPick.Win]::Front($o.Handle)" in win[-1]
 assert win[-1].index("$o.Show();") < win[-1].index("::Front(") < win[-1].index("ShowDialog($o)") < win[-1].index("$o.Close()")
 assert "try { Add-Type" in win[-1]   # if the helper can't load, the dialog still opens
+assert "[LegoPick.Win]::FindDialog()" in win[-1] and "$t.Start()" in win[-1]   # the dialog itself is pushed forward too
+assert len(subprocess.list2cmdline(win)) < 30000   # fits a Windows command line
 print("Windows: folder dialog is brought in front of the browser: OK")
 
 # On a real system, check the dialog script is valid WITHOUT showing it.
@@ -53,6 +55,40 @@ if platform.system() == "Windows":
     r = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", front], capture_output=True, text=True, timeout=120)
     assert r.returncode == 0 and "front-ok" in r.stdout, r.stdout + r.stderr
     print("Windows: the bring-to-front helper compiles and runs: OK")
+
+    # On the GitHub Windows build machine only (it would pop up a dialog on your PC):
+    # put another app (Notepad) in front, open the real folder dialog, and check the
+    # dialog ends up as the window in front.
+    if os.environ.get("GITHUB_ACTIONS"):
+        import time
+        watch = (
+            "Add-Type -Namespace T -Name U -MemberDefinition '"
+            '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); '
+            '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid); '
+            '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n);'
+            "'; $want = [uint32]$args[0]; $end = (Get-Date).AddSeconds(25); $last = ''; "
+            "while ((Get-Date) -lt $end) { $h = [T.U]::GetForegroundWindow(); $p = [uint32]0; "
+            "[void][T.U]::GetWindowThreadProcessId($h, [ref]$p); $c = New-Object System.Text.StringBuilder 64; "
+            "[void][T.U]::GetClassName($h, $c, 64); $last = $c.ToString() + ' pid=' + $p; "
+            "if ($p -eq $want -and $c.ToString() -eq '#32770') { 'FRONT ' + $last; exit 0 }; Start-Sleep -Milliseconds 200 }; "
+            "'NOT-FRONT ' + $last; exit 1"
+        )
+        def front_check(pid):
+            r = subprocess.run(["powershell", "-NoProfile", "-Command", "& {" + watch + "}", str(pid)],
+                               capture_output=True, text=True, timeout=120)
+            return r.returncode == 0, (r.stdout + r.stderr).strip()
+        notepad = subprocess.Popen(["notepad.exe"])
+        time.sleep(3)
+        dialog = subprocess.Popen(fp.folder_dialog_command(start, "Pick a folder"),
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            ok, seen = front_check(dialog.pid)
+        finally:
+            dialog.kill(); notepad.kill()
+        note = dialog.communicate(timeout=30)[1]
+        print(f"Windows (GitHub): foreground check: {seen}; dialog note: {note.strip()!r}")
+        assert ok, f"the folder dialog didn't come in front of Notepad: {seen}; {note}"
+        print("Windows: the real folder dialog opens in front of another app: OK")
 elif platform.system() == "Darwin" and _sh.which("osacompile"):
     script = fp.folder_dialog_command(start, 'Pick "it"')[2]
     r = subprocess.run(["osacompile", "-e", script, "-o", str(sandbox / "pick.scpt")], capture_output=True, text=True)

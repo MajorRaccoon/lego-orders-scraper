@@ -22,6 +22,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 DEFAULT_PROMPT = "Choose where to save the LEGO order files"
@@ -36,8 +37,10 @@ def _powershell_quote(s):
 
 
 # Windows won't let a background process (our web server) put its window in front
-# of the browser. Joining the foreground window's input thread for a moment lifts that
-# restriction, so the folder dialog opens on top instead of behind the browser.
+# of the browser. Front() gets around that: holding Alt down (a synthetic key press
+# lifts Windows' "foreground lock") and briefly joining the foreground window's input
+# thread, it makes the window always-on-top and gives it the focus. FindDialog() finds
+# the folder dialog once it's open, so Front() can be applied to the dialog itself.
 _WIN_FRONT_CS = (
     '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); '
     '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr p); '
@@ -45,12 +48,30 @@ _WIN_FRONT_CS = (
     '[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach); '
     '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); '
     '[DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h); '
-    "public static void Front(IntPtr h) { "
+    '[DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags); '
+    '[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra); '
+    '[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); '
+    '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n); '
+    "public delegate bool EnumProc(IntPtr h, IntPtr l); "
+    '[DllImport("user32.dll")] public static extern bool EnumThreadWindows(uint thread, EnumProc cb, IntPtr l); '
+    "public static IntPtr FindDialog() { "
+    "IntPtr found = IntPtr.Zero; "
+    "EnumThreadWindows(GetCurrentThreadId(), delegate(IntPtr h, IntPtr l) { "
+    "System.Text.StringBuilder c = new System.Text.StringBuilder(64); GetClassName(h, c, 64); "
+    'if (c.ToString() == "#32770" && IsWindowVisible(h)) { found = h; return false; } '
+    "return true; }, IntPtr.Zero); "
+    "return found; } "
+    "public static bool Front(IntPtr h) { "
+    "keybd_event(0x12, 0, 0, UIntPtr.Zero); "  # Alt down
     "uint fg = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero); "
     "uint me = GetCurrentThreadId(); "
     "bool joined = fg != 0 && fg != me && AttachThreadInput(me, fg, true); "
-    "BringWindowToTop(h); SetForegroundWindow(h); "
-    "if (joined) { AttachThreadInput(me, fg, false); } }"
+    "SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); "  # HWND_TOPMOST, no move/size, show
+    "BringWindowToTop(h); "
+    "bool ok = SetForegroundWindow(h); "
+    "if (joined) { AttachThreadInput(me, fg, false); } "
+    "keybd_event(0x12, 0, 2, UIntPtr.Zero); "  # Alt up (lands on our window, so the browser never sees an Alt press)
+    "return ok || GetForegroundWindow() == h; }"
 )
 
 
@@ -73,16 +94,22 @@ def folder_dialog_command(start=None, prompt=DEFAULT_PROMPT, system=None):
             "$d.ShowNewFolderButton = $true; "
             + (f"$d.SelectedPath = {_powershell_quote(start)}; " if start else "")
             # A tiny invisible always-on-top window, shown and pushed to the front, owns the
-            # dialog so the dialog opens on top of the browser (and centered on screen).
+            # dialog (so the dialog opens centered on screen). Once the dialog itself is open,
+            # a timer finds it and pushes it to the front too. "front:..." goes to stderr so
+            # choose_folder() can log it if Windows refused.
             + "$o = New-Object System.Windows.Forms.Form -Property @{TopMost = $true; "
             "ShowInTaskbar = $false; FormBorderStyle = 'None'; Opacity = 0; "
             "StartPosition = 'CenterScreen'; Size = New-Object System.Drawing.Size(1, 1)}; "
             "$o.Show(); "
+            "$t = New-Object System.Windows.Forms.Timer -Property @{Interval = 100}; "
             f"try {{ Add-Type -Namespace LegoPick -Name Win -MemberDefinition {_powershell_quote(_WIN_FRONT_CS)}; "
-            "[LegoPick.Win]::Front($o.Handle) } catch { }; "
+            "[void][LegoPick.Win]::Front($o.Handle); "
+            "$t.add_Tick({ $h = [LegoPick.Win]::FindDialog(); "
+            "if ($h -ne [IntPtr]::Zero) { $t.Stop(); [Console]::Error.Write('front:' + [LegoPick.Win]::Front($h)) } }); "
+            "$t.Start() } catch { [Console]::Error.Write('front:error ' + $_) }; "
             "$o.Activate(); "
             "$ok = $d.ShowDialog($o) -eq [System.Windows.Forms.DialogResult]::OK; "
-            "$o.Close(); "
+            "$t.Stop(); $o.Close(); "
             "if ($ok) { [Console]::Out.Write($d.SelectedPath) }"
         )
         return ["powershell", "-NoProfile", "-STA", "-Command", ps]
@@ -114,6 +141,10 @@ def choose_folder(start=None, prompt=DEFAULT_PROMPT):
         result = subprocess.run(cmd, **kwargs)
     except (OSError, subprocess.TimeoutExpired):
         return None
+    note = (result.stderr or "").strip()
+    if note and note != "front:True":
+        # e.g. Windows refused to bring the dialog in front of the browser
+        print(f"Folder dialog note: {note[:300]}", file=sys.stderr, flush=True)
     path = (result.stdout or "").strip()
     if result.returncode != 0 or not path:
         return None  # cancelled
