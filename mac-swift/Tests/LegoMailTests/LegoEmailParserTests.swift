@@ -323,6 +323,46 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertTrue(parseArticleProductPairs(["2020 The LEGO Group.", "Thanks", "100 Print Shop Road"]).isEmpty)
     }
 
+    /// A real 2023 order confirmation (as text, personal details replaced): items listed as
+    /// name / price / quantity / line total under a "Price QTD. TOTAL" heading, no item number,
+    /// and "SUB TOTAL" written as two words.
+    func testCurrentOrderConfirmationEmail() {
+        let html = """
+        <h1>We've got your order</h1><p>Hi Customer,</p><p>Thanks for your order.</p>
+        <table><tr><td>Your order details</td></tr><tr><td>Order: T100000007</td></tr>
+        <tr><td>Order date: 1/9/2023</td></tr><tr><td>Shipping address:<br>1 Example St<br>Anytown<br>00000</td></tr></table>
+        <table><tr><td>SUB TOTAL:</td><td>$36.98</td></tr><tr><td>SHIPPING:</td><td>$0.00</td></tr>
+        <tr><td>TAX:</td><td>$2.68</td></tr><tr><td>ORDER TOTAL:</td><td>$39.66</td></tr></table>
+        <table><tr><td>Price</td><td>QTD.</td><td>TOTAL</td></tr>
+        <tr><td>Money Tree V39</td><td>$24.99</td><td>1</td><td>$24.99</td></tr><tr><td>Status:</td><td>In Process</td></tr>
+        <tr><td>Clone Trooper&trade; Command Station V46</td><td>$11.99</td><td>1</td><td>$11.99</td></tr><tr><td>Status:</td><td>In Process</td></tr></table>
+        <p>CONTACT US</p><p>My Account</p>
+        """
+        let raw = "From: LEGO® Shop <Noreply@t.crm.lego.com>\nSubject: We've got it! Your LEGO® order is confirmed, Customer\n"
+            + "Date: Mon, 09 Jan 2023 13:53:20 -0600\nContent-Type: text/html; charset=utf-8\n\n" + html
+        let m = parseMail(Data(raw.utf8))
+        XCTAssertTrue(looksLikeLegoOrderEmail(m))
+        guard let e = parseLegoEmail(m) else { return XCTFail("email not read") }
+        XCTAssertEqual(e.orderNumber, "T100000007")
+        XCTAssertEqual(e.kind, .confirmation)
+        XCTAssertEqual(e.orderDate, "January 9, 2023")
+        XCTAssertEqual(e.items.map(\.name), ["Money Tree", "Clone Trooper Command Station"])
+        XCTAssertEqual(e.items.map(\.quantity), [1, 1])
+        XCTAssertEqual(e.items.map(\.regularPrice), ["24.99", "11.99"])
+        XCTAssertEqual(e.items.map(\.salePrice), ["24.99", "11.99"])
+        XCTAssertEqual(e.summary.keys, ["subtotal", "delivery", "tax", "total"])
+        XCTAssertEqual(e.summary["subtotal"], "36.98")
+        XCTAssertEqual(e.summary["total"], "39.66")
+
+        // On sale (old price shown first), quantity 2.
+        let sale = parsePriceQuantityColumns(["Price", "QTD.", "TOTAL", "Botanical Orchid V29", "$49.99", "$39.99", "2", "$79.98"])
+        XCTAssertEqual(sale.first?.regularPrice, "49.99")
+        XCTAssertEqual(sale.first?.salePrice, "39.99")
+        XCTAssertEqual(sale.first?.quantity, 2)
+        // Summary lines aren't taken for items.
+        XCTAssertTrue(parsePriceQuantityColumns(["SUB TOTAL:", "$36.98", "TAX:", "$2.68", "ORDER TOTAL:", "$39.66"]).isEmpty)
+    }
+
     func testCombiningEmailsIntoOrders() {
         func line(_ name: String, _ number: String, _ price: String?) -> LegoOrderLine {
             LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: 1,

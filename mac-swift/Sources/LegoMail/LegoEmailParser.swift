@@ -237,7 +237,7 @@ private func canBeName(_ line: String) -> Bool {
 }
 
 /// Lines that end an item's block: the order summary has started.
-private let summaryStart = "^(sub-?total|order total|grand total|total\\b|shipping|delivery|postage|tax|sales tax|estimated tax|"
+private let summaryStart = "^(sub[- ]?total|order total|grand total|total\\b|shipping|delivery|postage|tax|sales tax|estimated tax|"
     + "discount|promo|order summary|payment|billing|lego\\s*®?\\s*insiders)"
 
 /// "LEGO Star Wars Millennium Falcon 75192" or "... (75192)" -> ("LEGO Star Wars Millennium Falcon", "75192").
@@ -324,8 +324,55 @@ public func parseEmailItems(_ lines: [String]) -> [LegoOrderLine] {
             prices: buildPrices(prices), isFreeGift: free && prices.isEmpty,
             isPiece: a.isPiece, isGiftCard: isGiftCard, status: nil, trackingNumber: nil))
     }
-    // Nothing in the usual layouts: try the older two-line "article / item number + name" list.
-    return items.isEmpty ? parseArticleProductPairs(lines) : items
+    // Nothing in the usual layouts: try the "name / price / quantity / total" columns of
+    // current order confirmations, then the older two-line "article / item number + name" list.
+    if !items.isEmpty { return items }
+    let columnItems = parsePriceQuantityColumns(lines)
+    return columnItems.isEmpty ? parseArticleProductPairs(lines) : columnItems
+}
+
+/// Current LEGO order confirmations (seen in 2023) list items under a "Price / QTD. / TOTAL"
+/// heading, one value per line, with no item number:
+///     Money Tree V39
+///     $24.99          (price; a sale shows the old price first)
+///     1               (quantity)
+///     $24.99          (line total)
+///     Status:
+///     In Process
+public func parsePriceQuantityColumns(_ lines: [String]) -> [LegoOrderLine] {
+    let money = "^-?\\$\\d[\\d,]*\\.\\d{2}$"
+    var items: [LegoOrderLine] = []
+    var i = 0
+    while i < lines.count {
+        var j = i + 1
+        var prices: [String] = []
+        while j < lines.count, prices.count < 2, MRx.search(money, lines[j]) != nil {
+            prices += amounts(in: lines[j]); j += 1
+        }
+        guard !prices.isEmpty, j < lines.count, let q = Int(lines[j]), MRx.search("^\\d{1,3}$", lines[j]) != nil,
+              canBeName(lines[i]) else { i += 1; continue }
+        var next = j + 1
+        if let total = lines[safe: next], MRx.search(money, total) != nil {
+            // The line total, when the shown price isn't the price paid each.
+            if q > 0, let t = amounts(in: total).first.flatMap(amountValue), let last = prices.last.flatMap(amountValue),
+               abs(t / Double(q) - last) >= 0.005 {
+                prices.append(String(format: "%.2f", t / Double(q)))
+            }
+            next += 1
+        }
+        let name = cleanProductName(lines[i])
+        let free = prices.allSatisfy { amountValue($0) == 0 }
+        items.append(LegoOrderLine(
+            name: name, itemNumber: nil, customID: nil, quantity: q,
+            prices: free ? emptyPrices() : buildPrices(prices), isFreeGift: free, isPiece: false,
+            isGiftCard: MRx.search("gift ?card|e-?gift", name) != nil, status: nil, trackingNumber: nil))
+        i = next
+    }
+    return items
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
 
 /// Older LEGO emails list each item on two lines: LEGO's article number alone, then the item
@@ -412,7 +459,7 @@ public func labelColumnValues(_ lines: [String]) -> [String: String] {
 // MARK: Summary, date, tracking
 
 private let summaryRules: [(key: String, pattern: String)] = [
-    ("subtotal", "^(?:order\\s+|merchandise\\s+|item(?:s)?\\s+)?sub-?total"),
+    ("subtotal", "^(?:order\\s+|merchandise\\s+|item(?:s)?\\s+)?sub[- ]?total"),
     ("delivery", "^(?:standard\\s+|express\\s+)?(?:shipping|delivery|postage|shipping\\s*(?:&|and)\\s*handling)\\b"),
     ("tax", "^(?:estimated\\s+|sales\\s+)?(?:tax(?:es)?|vat|gst|hst)\\b"),
     ("insiders_discount", "^(?:lego\\s*®?\\s*)?insiders\\s+(?:discount|reward|savings)"),
