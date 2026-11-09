@@ -450,6 +450,66 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(amounts(in: "USD 1,234.56"), ["1,234.56"])
     }
 
+    /// A real LEGO Store receipt PDF (2024, card details replaced): item number + name, then the
+    /// price on the next line; "Total" under "TAX Summary" is the tax; "Balance due" is the total.
+    func testLegoStoreReceiptPDF() {
+        let pdf = """
+        744 LEGO, CRABTREE, NC
+        4325 GLENWOOD AVE STE 1078
+        RALEIGH, 27612-4520, US
+        Sales Transaction
+        75396 Desert Skiff & Sarlacc…
+        $79.99
+        TAX Summary Rate TAX
+        4.75% $3.80
+        2.0% $1.60
+        0.5% $0.40
+        Total $5.80
+        Number of items : 1
+        Balance due $85.79
+        Paid with Visa $85.79
+        Become a LEGO® Insider!
+        Type in 744-26823494-10-25-24
+        Cardholders copy
+        Date/Time 10/25/24 4:32:12 PM
+        Card ****
+        0000
+        Cardtype Visa
+        Auth. code 000000
+        Order Information
+        Transaction #: LEGO0000000001
+        Time & Date: October 25, 2024
+        4:32:12 PM
+        LEGO Brand Retail, Inc., 100 Print Shop Rd,
+        Enfield, 06082 , US
+        """
+        let raw = "From: The LEGO Store <receipts@m.lego.com>\nSubject: LEGO® Store Receipt LEGO0000000001 from 25.10.2024\n"
+            + "Date: Fri, 25 Oct 2024 20:32:26 +0000\nContent-Type: text/plain\n\n"
+            + "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0\"><html><head><style>.amount{width: 13%;}</style></head>"
+            + "<body><p>Attached to this mail you can find the receipt <strong>LEGO0000000001</strong>.</p></body></html>"
+        let m = parseMail(Data(raw.utf8))
+        XCTAssertTrue(looksLikeLegoOrderEmail(m))
+        guard let e = parseLegoEmail(m, attachmentTexts: [pdf]) else { return XCTFail("receipt not read") }
+        XCTAssertEqual(e.orderNumber, "LEGO0000000001")
+        XCTAssertEqual(e.kind, .inStore)
+        XCTAssertEqual(e.orderDate, "October 25, 2024")
+        XCTAssertEqual(e.items.map(\.name), ["Desert Skiff & Sarlacc..."])
+        XCTAssertEqual(e.items.map(\.itemNumber), ["75396"])
+        XCTAssertEqual(e.items.map(\.quantity), [1])
+        XCTAssertEqual(e.items.first?.regularPrice, "79.99")
+        XCTAssertEqual(e.summary["tax"], "5.80")
+        XCTAssertEqual(e.summary["total"], "85.79")
+
+        let order = buildOrders(from: [e], timeZone: TimeZone(identifier: "UTC")!)[0]
+        XCTAssertEqual(order.status, "In-store purchase")
+        XCTAssertEqual(order.items.first?.status, "In-store purchase")
+        XCTAssertEqual(order.url, ordersURL)
+        XCTAssertEqual(normalizeDate("25.10.2024"), "October 25, 2024")
+        XCTAssertEqual(dateInSubject("LEGO® Store Receipt LEGO0000000001 from 25.10.2024"), "October 25, 2024")
+        // The address line above isn't an item: the line after it isn't a price.
+        XCTAssertTrue(parseNumberNamePriceLines(["4325 GLENWOOD AVE STE 1078", "RALEIGH, 27612-4520, US"]).isEmpty)
+    }
+
     func testCombiningEmailsIntoOrders() {
         func line(_ name: String, _ number: String, _ price: String?) -> LegoOrderLine {
             LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: 1,

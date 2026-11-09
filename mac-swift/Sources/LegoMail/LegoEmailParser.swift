@@ -12,13 +12,14 @@ import LegoCore
 
 /// What an email is about. Decides the order's status.
 public enum LegoEmailKind: String, CaseIterable {
-    case confirmation, inWarehouse, shipped, delivered, cancelled, refunded, returned, backordered, other
+    case confirmation, inStore, inWarehouse, shipped, delivered, cancelled, refunded, returned, backordered, other
 
     /// The status word saved for the order (same words the LEGO.com scraper uses).
     public var status: String? {
         switch self {
         case .confirmation: return "Processing"
         case .inWarehouse: return "In Warehouse"
+        case .inStore: return "In-store purchase"
         case .shipped: return "Shipped"
         case .delivered: return "Delivered"
         case .cancelled: return "Cancelled"
@@ -88,7 +89,9 @@ public func parseLegoEmail(_ m: MailMessage, source: String = "", attachmentText
     let subject = m.subject
     // Read every version of the content: the HTML and plain-text bodies and any PDF receipt.
     // Use whichever one gives the most item detail (often the PDF, when there is one).
-    let plain = m.plainText.trimmed.isEmpty ? "" : m.plainText
+    var plain = m.plainText.trimmed.isEmpty ? "" : m.plainText
+    // Some senders put the HTML version in the plain-text part too.
+    if MRx.search("^\\s*(<!doctype html|<html)", plain) != nil { plain = htmlToText(plain) }
     let html = m.htmlText.isEmpty ? "" : htmlToText(m.htmlText)
     let candidates = ([html, plain] + attachmentTexts).filter { !$0.trimmed.isEmpty }
     guard let number = findOrderNumber(subject: subject, bodies: candidates)
@@ -172,6 +175,7 @@ public func classifyEmail(subject: String, body: [String] = []) -> LegoEmailKind
         if MRx.search("ship|on (its|the) way|dispatch|out for delivery|track(ing)?\\b|package|parcel", s) != nil {
             return .shipped
         }
+        if MRx.search("\\bstore\\s+receipt", s) != nil { return .inStore }  // bought at a LEGO Store
         if MRx.search("order|confirm|thank|receipt|received|placed|purchase", s) != nil { return .confirmation }
         return .other
     }
@@ -338,7 +342,9 @@ public func parseEmailItems(_ lines: [String]) -> [LegoOrderLine] {
     // current order confirmations, then the older two-line "article / item number + name" list.
     if !items.isEmpty { return items }
     let columnItems = parsePriceQuantityColumns(lines)
-    return columnItems.isEmpty ? parseArticleProductPairs(lines) : columnItems
+    if !columnItems.isEmpty { return columnItems }
+    let pairs = parseArticleProductPairs(lines)
+    return pairs.isEmpty ? parseNumberNamePriceLines(lines) : pairs
 }
 
 /// Current LEGO order confirmations (seen in 2023) list items under a "Price / QTD. / TOTAL"
@@ -385,6 +391,30 @@ extension Array {
     subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
 
+/// LEGO Store receipts (seen in 2024): the item number and name on one line, its price on the next:
+///     75396 Desert Skiff & Sarlacc…
+///     $79.99
+/// A "2 x $79.99" or "Qty 2" line right after sets the quantity (default 1).
+public func parseNumberNamePriceLines(_ lines: [String]) -> [LegoOrderLine] {
+    var items: [LegoOrderLine] = []
+    for i in lines.indices.dropLast() {
+        guard let m = MRx.search("^(\\d{4,8})\\s+(.*[A-Za-z].*)$", lines[i]), let number = m[1], let rawName = m[2],
+              isOnlyAmount(lines[i + 1]), let price = amounts(in: lines[i + 1]).last else { continue }
+        var q = 1
+        if let next = lines[safe: i + 2],
+           let qm = MRx.search("^(?:(\\d{1,3})\\s*[x@×]|(?:qty|quantity)\\s*:?\\s*(\\d{1,3}))", next) {
+            q = Int(qm[1] ?? qm[2] ?? "") ?? 1
+        }
+        let name = cleanProductName(rawName)
+        let free = amountValue(price) == 0
+        items.append(LegoOrderLine(
+            name: name, itemNumber: number, customID: nil, quantity: q,
+            prices: free ? emptyPrices() : buildPrices([price]), isFreeGift: free, isPiece: false,
+            isGiftCard: MRx.search("gift ?card|e-?gift", name) != nil, status: nil, trackingNumber: nil))
+    }
+    return items
+}
+
 /// Older LEGO emails list each item on two lines: LEGO's article number alone, then the item
 /// number and name ("The following products will be shipped soon:"):
 ///     6222893
@@ -410,6 +440,7 @@ public func parseArticleProductPairs(_ lines: [String]) -> [LegoOrderLine] {
 /// ("Ice Skating Rink V39" -> "Ice Skating Rink").
 func cleanProductName(_ raw: String) -> String {
     let dashes = raw.replacingOccurrences(of: "–", with: "-").replacingOccurrences(of: "—", with: "-")
+        .replacingOccurrences(of: "…", with: "...")
     let ascii = MRx.replace("\\s+", in: cleanItemName(dashes), with: " ").trimmed
     return MRx.replace("\\s+V\\d{1,3}$", in: ascii, with: "", caseInsensitive: false)
 }
@@ -506,6 +537,7 @@ private let summaryRules: [(key: String, pattern: String)] = [
     ("insiders_discount", "^(?:(?:lego\\s*®?\\s*)?insiders|vip)\\s+(?:discount|reward|savings)"),
     ("discount", "^(?:discount|promotion(?:al)?|promo(?:\\s*code)?|coupon|savings|you saved)\\b"),
     ("total", "^(?:order\\s+|grand\\s+|estimated\\s+|invoice\\s+)?total\\b(?!\\s*(?:items|savings|quantity|qty))"),
+    ("balance", "^balance\\s+due\\b"),
 ]
 
 /// "Subtotal 26.97" (receipts often have no currency sign) -> "26.97". Only used on a line
@@ -541,7 +573,16 @@ public func parseEmailSummary(_ lines: [String]) -> OrderedStrings {
             c = max(j, c + 1)
         }
     }
+    // A store receipt's "TAX Summary" block ends with its own "Total" (the tax), and the
+    // amount paid is "Balance due".
+    var inTaxSummary = false
     for (i, line) in lines.enumerated() where !columnLines.contains(i) {
+        if MRx.search("^tax\\s+summary\\b", line) != nil { inTaxSummary = true; continue }
+        if inTaxSummary, MRx.search("^total\\b", line) != nil {
+            if let v = amounts(in: line).last ?? bareAmount(atEndOf: line) { found["tax"] = v }
+            inTaxSummary = false
+            continue
+        }
         for (key, pattern) in summaryRules {
             guard MRx.search(pattern, line) != nil else { continue }
             if key != "total", found[key] != nil { break }
@@ -556,6 +597,10 @@ public func parseEmailSummary(_ lines: [String]) -> OrderedStrings {
             if var v = value {
                 if key.hasSuffix("discount"), !v.hasPrefix("-"), amountValue(v) != 0 { v = "-" + v }
                 found[key] = v
+            }
+            // "Balance due" is the total when something was due (on a paid receipt it's 0.00).
+            if key == "balance", let b = found.removeValue(forKey: "balance"), let bv = amountValue(b), bv > 0 {
+                found["total"] = b
             }
             break
         }
@@ -574,7 +619,7 @@ public func findOrderDate(_ lines: [String]) -> String? {
     let columns = labelColumnValues(lines)
     if let d = columns["order date"].flatMap(normalizeDate) { return d }
     let labelled = "^(?:order\\s*date|date\\s*ordered|order\\s*placed(?:\\s*on)?|placed\\s*on|date\\s*placed|"
-        + "(?:receipt|purchase|transaction|sale)\\s*date|date\\s*of\\s*purchase)\\s*[:]?\\s*(.*)$"
+        + "(?:receipt|purchase|transaction|sale)\\s*date|date\\s*of\\s*purchase|time\\s*&\\s*date|date\\s*(?:&|/)\\s*time)\\s*[:]?\\s*(.*)$"
     // A bare "Date:" only counts when nothing better is there (a forwarded email's own
     // "Date:" header line would otherwise win).
     for pattern in [labelled, "^date\\s*:\\s*(.*)$"] {
@@ -610,7 +655,7 @@ public func normalizeDate(_ s: String) -> String? {
     f.timeZone = TimeZone(secondsFromGMT: 0)
     f.isLenient = false
     for format in ["MMMM d, yyyy", "MMM d, yyyy", "MMM. d, yyyy", "MMMM d yyyy", "d MMMM yyyy", "d MMM yyyy",
-                   "MM/dd/yyyy", "M/d/yyyy", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy"] {
+                   "MM/dd/yyyy", "M/d/yyyy", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy", "dd.MM.yyyy", "d.M.yyyy"] {
         f.dateFormat = format
         if let d = f.date(from: t) { return formatOrderDate(d, timeZone: TimeZone(secondsFromGMT: 0)!) }
     }
