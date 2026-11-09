@@ -21,6 +21,7 @@ lego_mail_orders.json, lego_mail_orders.csv and lego_mail_orders.html.
   --no-tracking         Leave tracking numbers out of the files
   --fresh               Don't keep orders from an earlier run that aren't in the mail any more
   --save-email-text DIR Save the text of every LEGO order email in DIR (for troubleshooting)
+  --pdf-dir DIR         Also read every receipt PDF in DIR (e.g. saved with Mail's File > Save Attachments)
   --read-pdf FILE       Just read one PDF receipt: print its text and what was read from it
   --version             Print the version
 """
@@ -63,6 +64,7 @@ var outputDir = FileManager.default.urls(for: .applicationSupportDirectory, in: 
 var since: SimpleDate?
 var makeHTML = true, includeTracking = true, fresh = false
 var saveText: URL?
+var pdfDir: URL?
 
 func value(_ flag: String) -> String {
     guard !args.isEmpty else { fail("\(flag) needs a value") }
@@ -80,6 +82,7 @@ while !args.isEmpty {
     case "--no-tracking": includeTracking = false
     case "--fresh": fresh = true
     case "--save-email-text": saveText = folder(value(a))
+    case "--pdf-dir": pdfDir = folder(value(a))
     case "--read-pdf": readOnePDF(URL(fileURLWithPath: (value(a) as NSString).expandingTildeInPath)); exit(0)
     case "--version": print("lego-mail \(legoMailVersion)"); exit(0)
     case "-h", "--help": print(usage); exit(0)
@@ -92,6 +95,7 @@ o.since = since
 o.includeTracking = includeTracking
 o.fresh = fresh
 o.saveTextDir = saveText
+o.receiptFolder = pdfDir
 print("LEGO Mail Orders v\(legoMailVersion)")
 print("Saving files in \(outputDir.path)")
 do {

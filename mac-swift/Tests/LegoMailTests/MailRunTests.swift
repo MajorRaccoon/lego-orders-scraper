@@ -76,6 +76,49 @@ final class MailRunTests: XCTestCase {
         XCTAssertTrue(text.contains("NOTE: This email lists 5550009.pdf, but the file isn't on this Mac"), text)
     }
 
+    /// A receipt email whose PDF Mail never downloaded, plus the same receipt saved into a folder
+    /// of PDFs: one order under the real order number, with the PDF's items. A receipt-number
+    /// placeholder saved by an earlier run (before the folder was used) is dropped.
+    func testReceiptFolderFillsInMissingPDFs() throws {
+        let mail = tmp.appendingPathComponent("Mail")
+        let messages = mail.appendingPathComponent("Data/Messages")
+        try FileManager.default.createDirectory(at: messages, withIntermediateDirectories: true)
+        let msg = """
+        From: LEGOshop.com <no-reply-billing03@lego.com>\r
+        Subject: LEGO Shop  Receipt 5550001 from 10/15/2026\r
+        Date: Thu, 15 Oct 2026 18:00:00 +0000\r
+        Message-ID: <r1@lego.com>\r
+        Content-Type: multipart/mixed; boundary="B"\r
+        \r
+        --B\r
+        Content-Type: text/plain\r
+        \r
+        You'll find enclosed a copy of the invoice 5550001.\r
+        --B\r
+        Content-Type: application/pdf; name="Receipt.pdf"\r
+        Content-Transfer-Encoding: base64\r
+        \r
+        --B--\r
+
+        """
+        try Data("\(msg.utf8.count)\n\(msg)<plist/>".utf8).write(to: messages.appendingPathComponent("51.partial.emlx"))
+        let out = tmp.appendingPathComponent("out")
+
+        // Without the folder: only a placeholder under the receipt number.
+        var o = MailRunOptions(mailFolder: mail, outputDir: out, makeHTML: false)
+        XCTAssertEqual(try runMailImport(o).map(\.orderNumber), ["5550001"])
+
+        // With the folder of saved PDFs.
+        o.receiptFolder = samples.appendingPathComponent("receipts")
+        var log: [String] = []
+        let orders = try runMailImport(o) { log.append($0) }
+        XCTAssertEqual(orders.map(\.orderNumber), ["T100000004"])  // merged, and the old placeholder dropped
+        XCTAssertEqual(orders[0].items.map(\.itemNumber), ["10281", "76914"])
+        XCTAssertEqual(orders[0].orderDate, "October 15, 2026")
+        XCTAssertEqual(orders[0].total, "108.34")
+        XCTAssertTrue(log.contains { $0.contains("Read 1 receipt PDF(s) from the folder") }, log.joined(separator: "\n"))
+    }
+
     func testFullRun() throws {
         let o = MailRunOptions(mailFolder: samples, outputDir: tmp)
         let orders = try runMailImport(o)

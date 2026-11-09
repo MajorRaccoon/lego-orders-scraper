@@ -27,6 +27,8 @@ final class MailAppModel: ObservableObject {
     @Published var fresh = false
     /// Where the JSON, CSV and HTML files are saved. Defaults to dataDir.
     @Published var outputDir: URL { didSet { defaults.set(outputDir.path, forKey: "outputDir"); refreshFiles() } }
+    /// Optional folder of receipt PDFs saved from Mail (File > Save Attachments).
+    @Published var receiptFolder: URL? { didSet { defaults.set(receiptFolder?.path, forKey: "receiptFolder") } }
     /// Which mail to read. Defaults to Apple Mail's own folder.
     @Published var mailFolder: URL { didSet { defaults.set(mailFolder.path, forKey: "mailFolder"); checkAccess() } }
 
@@ -57,6 +59,7 @@ final class MailAppModel: ObservableObject {
         saveEmailText = d.object(forKey: "saveEmailText") as? Bool ?? false
         outputDir = d.string(forKey: "outputDir").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? MailAppModel.defaultDataDir
         mailFolder = d.string(forKey: "mailFolder").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? defaultMailFolder
+        receiptFolder = d.string(forKey: "receiptFolder").map { URL(fileURLWithPath: $0, isDirectory: true) }
         try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
         refreshFiles()
         checkAccess()
@@ -120,6 +123,7 @@ final class MailAppModel: ObservableObject {
         o.since = useSinceDate ? SimpleDate(sinceDate) : nil
         o.includeTracking = !leaveOutTracking
         o.fresh = fresh
+        o.receiptFolder = receiptFolder
         let stamp = ISO8601DateFormatter().string(from: Date())
         o.saveTextDir = saveEmailText ? dataDir.appendingPathComponent("mail-text/\(stamp.replacingOccurrences(of: ":", with: "-"))") : nil
 
@@ -131,6 +135,7 @@ final class MailAppModel: ObservableObject {
         writeToLogFile("\n===== \(stamp) =====\n")
         append("LEGO Mail Orders v\(legoMailVersion)")
         append("Reading: \(display(mailFolder))")
+        if let r = receiptFolder { append("Receipt PDFs: \(display(r))") }
         append(o.since.map { "Since date: \($0)" } ?? "Since date: none (every order in the mail)")
 
         let options = o
@@ -217,4 +222,13 @@ final class MailAppModel: ObservableObject {
     }
 
     func resetMailFolder() { mailFolder = defaultMailFolder }
+
+    func chooseReceiptFolder() {
+        if let url = pickFolder(message: "Choose the folder where you saved the LEGO receipt PDFs (Mail: File > Save Attachments).",
+                                start: receiptFolder ?? FileManager.default.homeDirectoryForCurrentUser) {
+            receiptFolder = url
+        }
+    }
+
+    func clearReceiptFolder() { receiptFolder = nil }
 }

@@ -9,6 +9,7 @@ encodings the Mail reader must handle:
   .../Messages/1006.emlx         a "LEGO Shop Receipt" email with the PDF receipt inside it
   .../Messages/1007.partial.emlx a receipt email whose PDF Mail keeps separately, in
   .../Attachments/1007/2/        (as Mail does for big attachments)
+  receipts/                      receipt PDFs saved with Mail's File > Save Attachments
 
 Run it again after changing an email:  python3 sample-mail/make_sample_mail.py
 """
@@ -368,6 +369,10 @@ def main() -> None:
     attachment = STORE.parent / "Attachments" / "1007" / "2" / "Receipt 5550002.pdf"
     attachment.parent.mkdir(parents=True, exist_ok=True)
     attachment.write_bytes(RECEIPT_PDF_STORE)
+    # Saved from Mail: "/" in the attachment's name became "_".
+    RECEIPTS = HERE / "receipts"
+    RECEIPTS.mkdir(parents=True, exist_ok=True)
+    (RECEIPTS / "LEGO Shop  Receipt 5550001 from 10_15_2026.pdf").write_bytes(RECEIPT_PDF_ONLINE)
     # The same confirmation again, as Gmail's "All Mail" copy: must be read only once.
     write_emlx(ALL_MAIL / "2001.partial.emlx", CONFIRMATION)
 

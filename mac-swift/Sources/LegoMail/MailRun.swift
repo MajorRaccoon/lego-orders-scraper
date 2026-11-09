@@ -18,6 +18,8 @@ public struct MailRunOptions {
     /// Ignore orders saved by an earlier run (normally they're kept if their emails are gone).
     public var fresh = false
     public var saveTextDir: URL?
+    /// Optional folder of receipt PDFs saved from Mail (File > Save Attachments), read as receipts.
+    public var receiptFolder: URL?
 
     public init(mailFolder: URL, outputDir: URL, makeHTML: Bool = true) {
         self.mailFolder = mailFolder
@@ -39,8 +41,13 @@ public func runMailImport(_ o: MailRunOptions, stop: StopFlag = StopFlag(), log:
     let started = Date()
     let scan = scanMail(MailScanOptions(folder: o.mailFolder, since: o.since, saveTextDir: o.saveTextDir), stop: stop, log: log)
     if stop.requested { throw CancellationError() }
+    var emails = scan.emails
+    if let folder = o.receiptFolder {
+        emails += scanReceiptFolder(folder, saveTextDir: o.saveTextDir, stop: stop, log: log)
+        if stop.requested { throw CancellationError() }
+    }
 
-    var orders = buildOrders(from: scan.emails)
+    var orders = buildOrders(from: emails)
     if let since = o.since {
         let before = orders.count
         orders = orders.filter { !isBeforeSinceDate($0, since) }

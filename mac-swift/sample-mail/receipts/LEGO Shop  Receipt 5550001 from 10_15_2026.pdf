@@ -1,0 +1,49 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 843 >>
+stream
+BT /F1 11 Tf 50 760 Td (LEGO Shop Receipt) Tj ET
+BT /F1 11 Tf 50 744 Td (Receipt number: 5550001) Tj ET
+BT /F1 11 Tf 50 728 Td (Order Number: T100000004) Tj ET
+BT /F1 11 Tf 50 712 Td (Order Date: October 15, 2026) Tj ET
+BT /F1 11 Tf 50 696 Td (Description Qty Price) Tj ET
+BT /F1 11 Tf 50 680 Td (LEGO Icons Bonsai Tree) Tj ET
+BT /F1 11 Tf 50 664 Td (Item: 10281) Tj ET
+BT /F1 11 Tf 50 648 Td (Qty: 1) Tj ET
+BT /F1 11 Tf 50 632 Td ($49.99) Tj ET
+BT /F1 11 Tf 50 616 Td (LEGO Speed Champions Ferrari) Tj ET
+BT /F1 11 Tf 50 600 Td (Item: 76914) Tj ET
+BT /F1 11 Tf 50 584 Td (Qty: 2) Tj ET
+BT /F1 11 Tf 50 568 Td ($25.99) Tj ET
+BT /F1 11 Tf 50 552 Td ($51.98) Tj ET
+BT /F1 11 Tf 50 536 Td (Subtotal $101.97) Tj ET
+BT /F1 11 Tf 50 520 Td (Shipping $0.00) Tj ET
+BT /F1 11 Tf 50 504 Td (Tax $6.37) Tj ET
+BT /F1 11 Tf 50 488 Td (Total $108.34) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001134 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1231
+%%EOF

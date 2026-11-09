@@ -45,6 +45,7 @@ Don't want to grant that? Export the emails instead: in Mail, select your LEGO e
 | **Also make an HTML report** | Writes `lego_mail_orders.html`. |
 | **Leave out tracking numbers** | Tracking numbers are left blank in every file. |
 | **Start fresh** | Normally, orders found by an earlier run are kept even if their emails have since been deleted. This forgets them. |
+| **Receipt PDFs (optional)** | A folder of receipt PDFs saved from Mail (**File → Save Attachments…**), for receipts Mail hasn't downloaded. |
 | **Save matched emails for troubleshooting** | Saves every LEGO order email as a text file, with what the app read from it. See below. |
 
 Each run reads all the mail again, so there's nothing to resume. A mailbox with tens of thousands of emails takes a few seconds to a minute, because the app looks at each email's sender and subject first and reads only the LEGO ones in full.
@@ -79,6 +80,7 @@ Emails such as "LEGO® Shop Receipt *(receipt number)* from *(date)*" carry the 
 - A receipt with no LEGO order number (for example from a LEGO Store) is saved under its **receipt number**, dated from the receipt or the subject. Its "View on LEGO.com" link opens My Orders.
 - A scanned PDF (a picture, with no text in it) can't be read. The log counts these as "PDF(s) with no readable text".
 - **Mail may not have downloaded the PDF.** For IMAP accounts (Gmail, iCloud and others), Mail often keeps only the email and fetches attachments when you open them. The log counts these as "email(s) whose PDF receipt Mail hasn't downloaded", and the troubleshooting file says so. To fix it, in Mail choose **Settings → Accounts →** *(the account)* **→ Download Attachments: All**, let Mail finish downloading, then run again. Or open each email and click its PDF.
+- **Or save the receipts to a folder.** In Mail, select the receipt emails and choose **File → Save Attachments…**, then pick that folder under **Receipt PDFs (optional)** in the app (or `lego-mail --pdf-dir FOLDER`). Every PDF there is read as a receipt. A receipt whose PDF Mail hadn't downloaded (saved under its receipt number) is matched to its PDF by that number and merged into the right order.
 
 ## If orders come out wrong
 
@@ -101,6 +103,7 @@ swift run lego-mail                                   # read ~/Library/Mail
 swift run lego-mail --mail-dir ~/Desktop/lego-emails  # read exported .eml / .mbox files
 swift run lego-mail --mail-dir sample-mail --output-dir /tmp/lego-test   # the made-up sample mailbox
 swift run lego-mail --read-pdf ~/Downloads/Receipt.pdf  # check one PDF receipt
+swift run lego-mail --pdf-dir ~/Desktop/LEGO-receipts     # also read a folder of saved receipt PDFs
 ```
 
 `--read-pdf` reads a single PDF receipt and prints its text and what the app got from it (number, date, totals, items). It doesn't touch your mail and saves nothing, so it's a quick way to check a receipt before sharing anything.

@@ -170,6 +170,41 @@ private func readPrefix(_ url: URL, bytes: Int) -> Data? {
     return try? h.read(upToCount: bytes) ?? Data()
 }
 
+/// Every PDF in a folder of saved receipts (e.g. from Mail's File > Save Attachments), read like
+/// a receipt email. The file name stands in for the subject ("LEGO® Shop Receipt 1326310304
+/// from 05_19_2022.pdf"), so the receipt number and date can come from it.
+public func scanReceiptFolder(_ folder: URL, saveTextDir: URL? = nil, stop: StopFlag = StopFlag(),
+                              log: (String) -> Void = { _ in }) -> [LegoEmail] {
+    guard let e = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+    else { log("Couldn't open the receipt folder \(folder.path)."); return [] }
+    var files: [URL] = []
+    for case let url as URL in e where url.pathExtension.lowercased() == "pdf" { files.append(url) }
+    files.sort { $0.path < $1.path }
+    log("Found \(files.count) PDF file(s) in \(folder.path).")
+    var emails: [LegoEmail] = []
+    var unreadable = 0, notLego = 0
+    for (n, file) in files.enumerated() {
+        if stop.requested { break }
+        guard let data = try? Data(contentsOf: file), let text = pdfText(data) else { unreadable += 1; continue }
+        // Mail turns "/" in an attachment's name into "_" or ":" when saving it.
+        let subject = file.deletingPathExtension().lastPathComponent
+            .replacingOccurrences(of: "_", with: "/").replacingOccurrences(of: ":", with: "/")
+        var m = MailMessage()
+        m.headers = [(name: "subject", value: subject)]
+        let email = parseLegoEmail(m, source: file.path, attachmentTexts: [text])
+        if let email { emails.append(email) } else { notLego += 1 }
+        if let dir = saveTextDir {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            saveEmailText(m, email, pdfTexts: [(name: file.lastPathComponent, text: text)], file: file, number: 9000 + n, to: dir)
+        }
+    }
+    var summary = "Read \(emails.count) receipt PDF(s) from the folder"
+    if notLego > 0 { summary += ", \(notLego) PDF(s) with no LEGO order or receipt number skipped" }
+    if unreadable > 0 { summary += ", \(unreadable) PDF(s) with no readable text" }
+    log(summary + ".")
+    return emails
+}
+
 /// Troubleshooting copy of one email: its headers, both text versions, and what was read from it.
 /// Contains order details and your address, so share it only with someone you trust.
 func saveEmailText(_ m: MailMessage, _ email: LegoEmail?, pdfTexts: [(name: String, text: String)] = [],

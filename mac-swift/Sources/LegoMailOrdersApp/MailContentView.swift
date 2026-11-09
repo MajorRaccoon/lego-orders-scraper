@@ -49,6 +49,25 @@ struct MailContentView: View {
                 }
                 .disabled(model.isBusy)
 
+                GroupBox("Receipt PDFs (optional)") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(model.receiptFolder.map { model.display($0) } ?? "None")
+                            .font(.callout)
+                            .lineLimit(2).truncationMode(.middle)
+                            .textSelection(.enabled)
+                        HStack {
+                            Button("Browse…") { model.chooseReceiptFolder() }
+                            Button("Clear") { model.clearReceiptFolder() }.disabled(model.receiptFolder == nil)
+                        }
+                        Text("A folder of LEGO receipt PDFs you saved from Mail (File → Save Attachments). Use it when Mail hasn't downloaded the receipts.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                }
+                .disabled(model.isBusy)
+
                 GroupBox("Save files to") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(model.display(model.outputDir))

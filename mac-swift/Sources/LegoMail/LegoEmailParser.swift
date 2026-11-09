@@ -44,12 +44,16 @@ public struct LegoEmail {
     public var trackingNumbers: [String]
     /// Where the email came from (file path), for the log and troubleshooting.
     public var source: String
+    /// The receipt / invoice number, when there is one. Links a receipt whose PDF was missing
+    /// (saved under this number) to the same receipt read from a PDF (which has the order number).
+    public var receiptNumber: String?
 
     public init(orderNumber: String, kind: LegoEmailKind, subject: String, sentDate: Date?, orderDate: String?,
-                items: [LegoOrderLine], summary: OrderedStrings, trackingNumbers: [String], source: String) {
+                items: [LegoOrderLine], summary: OrderedStrings, trackingNumbers: [String], source: String,
+                receiptNumber: String? = nil) {
         self.orderNumber = orderNumber; self.kind = kind; self.subject = subject; self.sentDate = sentDate
         self.orderDate = orderDate; self.items = items; self.summary = summary
-        self.trackingNumbers = trackingNumbers; self.source = source
+        self.trackingNumbers = trackingNumbers; self.source = source; self.receiptNumber = receiptNumber
     }
 }
 
@@ -111,7 +115,10 @@ public func parseLegoEmail(_ m: MailMessage, source: String = "", attachmentText
         items: best?.items ?? [],
         summary: best?.summary ?? OrderedStrings(),
         trackingNumbers: findTrackingNumbers(cleanLines(allText)),
-        source: source
+        source: source,
+        receiptNumber: findReceiptNumber(subject: subject, bodies: [])
+            ?? labelColumnValues(cleanLines(allText))["invoice no"]
+            ?? findReceiptNumber(subject: "", bodies: candidates)
     )
 }
 

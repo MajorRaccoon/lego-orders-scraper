@@ -13,9 +13,21 @@ import LegoCore
 /// - A shipped/delivered/cancelled email that lists items updates only those items (partial
 ///   shipments and cancellations); one that lists none updates every item.
 public func buildOrders(from emails: [LegoEmail], timeZone: TimeZone = .current) -> [LegoOrder] {
+    // A receipt saved under its receipt number (its PDF wasn't available) joins the order that
+    // the same receipt's PDF names, when that PDF was read elsewhere (e.g. a folder of PDFs).
+    var orderForReceipt: [String: String] = [:]
+    for e in emails where isLegoOrderNumber(e.orderNumber) {
+        if let r = e.receiptNumber { orderForReceipt[r] = e.orderNumber }
+    }
+    let resolved = emails.map { e -> LegoEmail in
+        guard !isLegoOrderNumber(e.orderNumber), let order = orderForReceipt[e.orderNumber] else { return e }
+        var moved = e
+        moved.orderNumber = order
+        return moved
+    }
     var groups: [String: [LegoEmail]] = [:]
     var sequence: [String] = []
-    for e in emails {
+    for e in resolved {
         if groups[e.orderNumber] == nil { sequence.append(e.orderNumber) }
         groups[e.orderNumber, default: []].append(e)
     }
@@ -106,7 +118,9 @@ func buildOrder(_ number: String, _ emails: [LegoEmail], timeZone: TimeZone) -> 
 public func mergeMailOrders(_ fresh: [LegoOrder], previous: [LegoOrder]) -> [LegoOrder] {
     let seen = Set(fresh.map(\.orderNumber))
     var kept = fresh
-    for o in previous where !seen.contains(o.orderNumber) && !kept.contains(where: { $0.orderNumber == o.orderNumber }) {
+    // A receipt-number placeholder with no items (its PDF wasn't read then) isn't worth keeping.
+    for o in previous where !seen.contains(o.orderNumber) && !kept.contains(where: { $0.orderNumber == o.orderNumber })
+        && (isLegoOrderNumber(o.orderNumber) || !o.items.isEmpty) {
         kept.append(o)
     }
     // Re-sort so kept orders land at their date, not at the end.
