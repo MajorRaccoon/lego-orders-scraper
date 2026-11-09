@@ -399,7 +399,9 @@ public func parseArticleProductPairs(_ lines: [String]) -> [LegoOrderLine] {
 /// An item name from LEGO's order system: no ™/®, and no version code at the end
 /// ("Ice Skating Rink V39" -> "Ice Skating Rink").
 func cleanProductName(_ raw: String) -> String {
-    MRx.replace("\\s+V\\d{1,3}$", in: cleanItemName(raw).trimmed, with: "", caseInsensitive: false)
+    let dashes = raw.replacingOccurrences(of: "–", with: "-").replacingOccurrences(of: "—", with: "-")
+    let ascii = MRx.replace("\\s+", in: cleanItemName(dashes), with: " ").trimmed
+    return MRx.replace("\\s+V\\d{1,3}$", in: ascii, with: "", caseInsensitive: false)
 }
 
 /// One row of a LEGO receipt's item table, all on one line:
@@ -416,21 +418,50 @@ public func parseReceiptTableItems(_ lines: [String]) -> [LegoOrderLine] {
     for line in lines {
         guard let m = MRx.search(receiptRow, line), let number = m[2], let rawName = m[3],
               let q = m[4].flatMap({ Int($0) }), let money = m[5],
-              MRx.search("[A-Za-z]", rawName) != nil else { continue }
-        let values = money.split(separator: " ").map(String.init)
-        guard let unit = values.first, let amount = values.last,
-              let unitValue = amountValue(unit), let amountTotal = amountValue(amount) else { continue }
-        var sale = values.count == 4 ? values[2] : String(format: "%.2f", q > 0 ? amountTotal / Double(q) : amountTotal)
-        if amountValue(sale) == unitValue { sale = unit }
-        let free = unitValue == 0 && amountTotal == 0
-        let name = cleanProductName(rawName)
-        let isGiftCard = MRx.search("gift ?card|e-?gift", name) != nil
-        items.append(LegoOrderLine(
-            name: name, itemNumber: number, customID: nil, quantity: q,
-            prices: free ? emptyPrices() : buildPrices([unit, sale]), isFreeGift: free,
-            isPiece: false, isGiftCard: isGiftCard, status: nil, trackingNumber: nil))
+              let item = receiptItem(number: number, rawName: rawName, quantity: q, money: money) else { continue }
+        items.append(item)
+    }
+    return items.isEmpty ? parseSplitReceiptTable(lines) : items
+}
+
+/// PDFKit sometimes breaks a table row across lines and runs it into the column headings:
+///     Article Product Description 6589530 76476 The Ministry of Magic™
+///     Quantity Unit Price Discount Net Price Net Amount
+///     – Col.. V39 1 449.99 449.99
+/// So: take the table (from "Article" to the summary), drop the headings and the "-" part lines
+/// of Minifigure Factory builds, join it into one line and find the rows in that.
+func parseSplitReceiptTable(_ lines: [String]) -> [LegoOrderLine] {
+    guard let start = lines.firstIndex(where: { MRx.search("^article\\b", $0) != nil }) else { return [] }
+    let end = lines[start...].firstIndex(where: { MRx.search("^(sub[- ]?total|shipping|tax)\\b", $0) != nil }) ?? lines.count
+    var body = lines[start..<end].filter { MRx.search("^-\\d", $0) == nil }.joined(separator: " ")
+    body = MRx.replace("article\\s+product\\s+description|quantity\\s+unit\\s+price\\s+discount\\s+net\\s+price\\s+net\\s+amount",
+                       in: body, with: " ")
+    body = MRx.replace("\\s+", in: body, with: " ").trimmed
+    let amount = "-?\\d{1,3}(?:,\\d{3})*\\.\\d{2}"
+    let row = "(\\d{4,9})\\s+(\\d{3,9})\\s+(.+?)\\s+(\\d{1,4})\\s+(\(amount)(?:\\s+\(amount)){1,3})(?=\\s+\\d{4,9}\\s+\\d{3,9}\\s|\\s*$)"
+    let ns = body as NSString
+    var items: [LegoOrderLine] = []
+    for m in MRx.compile(row).matches(in: body, range: NSRange(location: 0, length: ns.length)) {
+        let g = { (i: Int) in ns.substring(with: m.range(at: i)) }
+        if let q = Int(g(4)), let item = receiptItem(number: g(2), rawName: g(3), quantity: q, money: g(5)) { items.append(item) }
     }
     return items
+}
+
+/// One receipt row -> an item. nil if it doesn't look like one (no letters in the name, bad amounts).
+private func receiptItem(number: String, rawName: String, quantity q: Int, money: String) -> LegoOrderLine? {
+    guard MRx.search("[A-Za-z]", rawName) != nil else { return nil }
+    let values = money.split(separator: " ").map(String.init)
+    guard let unit = values.first, let amount = values.last,
+          let unitValue = amountValue(unit), let amountTotal = amountValue(amount) else { return nil }
+    var sale = values.count == 4 ? values[2] : String(format: "%.2f", q > 0 ? amountTotal / Double(q) : amountTotal)
+    if amountValue(sale) == unitValue { sale = unit }
+    let free = unitValue == 0 && amountTotal == 0
+    let name = cleanProductName(rawName)
+    return LegoOrderLine(
+        name: name, itemNumber: number, customID: nil, quantity: q,
+        prices: free ? emptyPrices() : buildPrices([unit, sale]), isFreeGift: free,
+        isPiece: false, isGiftCard: MRx.search("gift ?card|e-?gift", name) != nil, status: nil, trackingNumber: nil)
 }
 
 /// Receipts lay out some fields as a column of labels followed by a column of values:

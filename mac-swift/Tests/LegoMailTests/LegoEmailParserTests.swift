@@ -363,6 +363,55 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertTrue(parsePriceQuantityColumns(["SUB TOTAL:", "$36.98", "TAX:", "$2.68", "ORDER TOTAL:", "$39.66"]).isEmpty)
     }
 
+    /// A real receipt PDF where PDFKit split the one item row and ran it into the column
+    /// headings (personal details replaced).
+    func testReceiptRowSplitAcrossHeadingLines() {
+        let pdf = """
+        LEGO Retail Receipt
+        Bill to: 000000001
+        Sample Customer
+        LEGO Order No.
+        T100000008
+        Order Date
+        Invoice No.
+        Invoice Date
+        Customer No.
+        29 Aug 2026
+        5550008
+        02 Sep 2026
+        000000001
+        Article Product Description 6589530 76476 The Ministry of Magic™
+        Quantity Unit Price Discount Net Price Net Amount
+        – Col.. V39 1 449.99 449.99
+        Subtotal 449.99
+        Shipping & Handling Free
+        Tax 32.62
+        Invoice Total 482.61
+        Paid by Credit Card -482.61
+        """
+        let m = parseMail(Data("Subject: LEGO Shop  Receipt 5550008 from 09/02/2026\nFrom: LEGOshop.com <no-reply-billing03@lego.com>\n\nInvoice enclosed.".utf8))
+        guard let e = parseLegoEmail(m, attachmentTexts: [pdf]) else { return XCTFail("receipt not read") }
+        XCTAssertEqual(e.orderNumber, "T100000008")
+        XCTAssertEqual(e.orderDate, "August 29, 2026")
+        XCTAssertEqual(e.items.map(\.name), ["The Ministry of Magic - Col.."])
+        XCTAssertEqual(e.items.map(\.itemNumber), ["76476"])
+        XCTAssertEqual(e.items.map(\.quantity), [1])
+        XCTAssertEqual(e.items.first?.regularPrice, "449.99")
+        XCTAssertEqual(e.summary["total"], "482.61")
+
+        // Two split rows, with a Minifigure Factory part line between them.
+        let two = parseReceiptTableItems(cleanLines("""
+        Article Product Description 1111111 75192 Millennium
+        Quantity Unit Price Discount Net Price Net Amount
+        Falcon V39 1 849.99 849.99 2222222 40000 Gift
+        -6153328 -26880 -MINI HEAD NO. 1965 1
+        Bag 1 0.00 0.00
+        Subtotal 849.99
+        """))
+        XCTAssertEqual(two.map(\.name), ["Millennium Falcon", "Gift Bag"])
+        XCTAssertEqual(two.map(\.isFreeGift), [false, true])
+    }
+
     func testCombiningEmailsIntoOrders() {
         func line(_ name: String, _ number: String, _ price: String?) -> LegoOrderLine {
             LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: 1,
