@@ -8,6 +8,12 @@ A native Mac app (Swift/SwiftUI) that finds your LEGO Shop emails in **Apple Mai
 
 It lives in the same Swift package as the LEGO.com app ([README-swift.md](README-swift.md)) and shares its code for the order records and the JSON, CSV and HTML files.
 
+## Get it
+
+Download **LEGO-Mail-Orders-macOS.zip** from the repo's **Releases** page, unzip it, and drag **LEGO Mail Orders.app** to Applications. The first time, macOS can't verify it because it isn't notarized: click **Done**, then **System Settings → Privacy & Security → Open Anyway**.
+
+Or build it yourself:
+
 ## Build it (once)
 
 Needs a Mac with Xcode (or the command-line tools: `xcode-select --install`) and macOS 13 or newer.

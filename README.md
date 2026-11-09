@@ -229,7 +229,7 @@ cd mac-swift
 ./build_mail_app.sh
 ```
 
-Full details: [`mac-swift/README-mail.md`](mac-swift/README-mail.md).
+Or download **LEGO-Mail-Orders-macOS.zip** from the repo's **Releases** page. Full details: [`mac-swift/README-mail.md`](mac-swift/README-mail.md).
 
 ---
 
@@ -278,6 +278,7 @@ Prices: each item has `regular_price` and `sale_price`. They're equal when the i
   ./sync_copies.sh
   ```
 - Bump `__version__` in a script whenever you change it.
+- **Making a release:** write the notes in `release-notes/vX.Y.Z.md`, merge to `main`, then run the **Release** workflow (Actions tab → Release → Run workflow) with the tag and a title. It builds and tests the macOS apps and both Windows apps from one commit, then publishes the release with all four zips and their SHA-256 checksums.
 - Run the test suite (needs `playwright`, `cryptography` and `flask` installed):
   ```bash
   python3 lego-tests/run_tests.py

@@ -12,6 +12,7 @@ name: macOS app
 
 on:
   workflow_dispatch:
+  workflow_call:  # run by the Release workflow (release.yml)
   push:
     branches: [main]
     paths:
