@@ -12,12 +12,13 @@ import LegoCore
 
 /// What an email is about. Decides the order's status.
 public enum LegoEmailKind: String, CaseIterable {
-    case confirmation, shipped, delivered, cancelled, refunded, returned, backordered, other
+    case confirmation, inWarehouse, shipped, delivered, cancelled, refunded, returned, backordered, other
 
     /// The status word saved for the order (same words the LEGO.com scraper uses).
     public var status: String? {
         switch self {
         case .confirmation: return "Processing"
+        case .inWarehouse: return "In Warehouse"
         case .shipped: return "Shipped"
         case .delivered: return "Delivered"
         case .cancelled: return "Cancelled"
@@ -159,6 +160,8 @@ public func classifyEmail(subject: String, body: [String] = []) -> LegoEmailKind
         if MRx.search("\\b(has been |was |been )?delivered\\b", s) != nil
             && MRx.search("(will|to) be delivered|out for delivery", s) == nil { return .delivered }
         if MRx.search("back-?order", s) != nil { return .backordered }
+        // "it's now reached our warehouse team" (checked before "ship": "will be shipped soon").
+        if MRx.search("reached (our|the) warehouse|(is|now) (in|at) (our|the) warehouse", s) != nil { return .inWarehouse }
         if MRx.search("ship|on (its|the) way|dispatch|out for delivery|track(ing)?\\b|package|parcel", s) != nil {
             return .shipped
         }
@@ -166,8 +169,10 @@ public func classifyEmail(subject: String, body: [String] = []) -> LegoEmailKind
         return .other
     }
     let fromSubject = kind(subject)
-    if fromSubject != .other { return fromSubject }
-    return kind(body.prefix(15).joined(separator: " "))
+    let fromBody = kind(body.prefix(15).joined(separator: " "))
+    // A vague subject ("Update on your LEGO Shop order") says less than the email's first lines.
+    if MRx.search("\\bupdate\\b", subject) != nil, fromBody != .other { return fromBody }
+    return fromSubject != .other ? fromSubject : fromBody
 }
 
 // MARK: Money
@@ -319,7 +324,35 @@ public func parseEmailItems(_ lines: [String]) -> [LegoOrderLine] {
             prices: buildPrices(prices), isFreeGift: free && prices.isEmpty,
             isPiece: a.isPiece, isGiftCard: isGiftCard, status: nil, trackingNumber: nil))
     }
+    // Nothing in the usual layouts: try the older two-line "article / item number + name" list.
+    return items.isEmpty ? parseArticleProductPairs(lines) : items
+}
+
+/// Older LEGO emails list each item on two lines: LEGO's article number alone, then the item
+/// number and name ("The following products will be shipped soon:"):
+///     6222893
+///     5005376 Star Wars™ Anniversary Pod V46
+/// No quantity or price. Requiring the article-number line first keeps lines such as
+/// "2020 The LEGO Group." from being taken for items.
+public func parseArticleProductPairs(_ lines: [String]) -> [LegoOrderLine] {
+    var items: [LegoOrderLine] = []
+    for i in lines.indices.dropFirst() {
+        guard MRx.search("^\\d{6,9}$", lines[i - 1]) != nil,
+              let m = MRx.search("^(\\d{4,8})\\s+(.*[A-Za-z].*)$", lines[i]), let number = m[1], let rawName = m[2]
+        else { continue }
+        let name = cleanProductName(rawName)
+        items.append(LegoOrderLine(
+            name: name, itemNumber: number, customID: nil, quantity: nil, prices: emptyPrices(),
+            isFreeGift: false, isPiece: false, isGiftCard: MRx.search("gift ?card|e-?gift", name) != nil,
+            status: nil, trackingNumber: nil))
+    }
     return items
+}
+
+/// An item name from LEGO's order system: no ™/®, and no version code at the end
+/// ("Ice Skating Rink V39" -> "Ice Skating Rink").
+func cleanProductName(_ raw: String) -> String {
+    MRx.replace("\\s+V\\d{1,3}$", in: cleanItemName(raw).trimmed, with: "", caseInsensitive: false)
 }
 
 /// One row of a LEGO receipt's item table, all on one line:
@@ -343,7 +376,7 @@ public func parseReceiptTableItems(_ lines: [String]) -> [LegoOrderLine] {
         var sale = values.count == 4 ? values[2] : String(format: "%.2f", q > 0 ? amountTotal / Double(q) : amountTotal)
         if amountValue(sale) == unitValue { sale = unit }
         let free = unitValue == 0 && amountTotal == 0
-        let name = cleanItemName(rawName).trimmed
+        let name = cleanProductName(rawName)
         let isGiftCard = MRx.search("gift ?card|e-?gift", name) != nil
         items.append(LegoOrderLine(
             name: name, itemNumber: number, customID: nil, quantity: q,

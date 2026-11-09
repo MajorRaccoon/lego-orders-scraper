@@ -257,7 +257,7 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(e.orderNumber, "T100000005")
         XCTAssertEqual(e.kind, .confirmation)
         XCTAssertEqual(e.orderDate, "October 6, 2026")  // the Order Date, not the Invoice Date
-        XCTAssertEqual(e.items.map(\.name), ["Minifigure Factory Online V39", "Darth Vader Vacation B GLOBAL 1",
+        XCTAssertEqual(e.items.map(\.name), ["Minifigure Factory Online", "Darth Vader Vacation B GLOBAL 1",
                                              "The Mandalorian with G GLOBAL 1"])
         XCTAssertEqual(e.items.map(\.itemNumber), ["3850082", "5010228", "5008114"])
         XCTAssertEqual(e.items.map(\.quantity), [1, 1, 1])
@@ -276,6 +276,51 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(two.first?.salePrice, "849.99")
         // A free gift row.
         XCTAssertEqual(parseReceiptTableItems(["1234567 40000 Gift with Purchase 1 0.00 0.00"]).first?.isFreeGift, true)
+    }
+
+    /// A real 2020 "Update on your LEGO Shop order" email (as text, personal details replaced):
+    /// items as an article-number line then "item number + name" with no quantity or price,
+    /// and the status only in the body ("reached our warehouse").
+    func testOlderWarehouseUpdateEmail() {
+        let html = """
+        <table><tr><td>UPDATE ABOUT YOUR ORDER</td></tr>
+        <tr><td>Dear Customer,</td></tr>
+        <tr><td>Thanks for your recent LEGO&reg; order T100000006.</td></tr>
+        <tr><td>We know you&rsquo;re waiting for it to arrive on your doorstep and the good news is it&rsquo;s now reached our warehouse team.
+        We wanted to let you know that our warehouse teams are following additional safety guidelines.</td></tr>
+        <tr><td>We&rsquo;re working hard to get your delivery to you as quickly as possible and you&rsquo;ll receive another email once your order&rsquo;s left our warehouse.</td></tr>
+        <tr><td>The following products will be shipped soon:</td></tr>
+        <tr><td>6222893</td></tr><tr><td>5005376 Star Wars&trade; Anniversary Pod V46</td></tr>
+        <tr><td>6301717</td></tr><tr><td>40416 Ice Skating Rink V39</td></tr>
+        <tr><td>6361472</td></tr><tr><td>5006482 Holiday Gift Set 2020 V46</td></tr>
+        <tr><td>6294186</td></tr><tr><td>75275 A-wing Starfighter&trade; V39</td></tr>
+        <tr><td>Thanks again for your order and we hope you have fun building!</td></tr>
+        <tr><td>LEGO and the LEGO logo are trademarks of the LEGO Group. 2020 The LEGO Group.</td></tr>
+        <tr><td>LEGO&reg; Shop, 100 Print Shop Road, Enfield, CT PO Box 1138 06082</td></tr></table>
+        """
+        let raw = "From: <donotreply@lego.com>\nSubject: Update on your LEGO Shop order\nDate: Fri, 4 Dec 2020 04:07:18 +0100\n"
+            + "Content-Type: text/html; charset=utf-8\n\n" + html
+        let m = parseMail(Data(raw.utf8))
+        XCTAssertTrue(looksLikeLegoOrderEmail(m))
+        guard let e = parseLegoEmail(m) else { return XCTFail("email not read") }
+        XCTAssertEqual(e.orderNumber, "T100000006")
+        XCTAssertEqual(e.kind, .inWarehouse)
+        XCTAssertEqual(e.items.map(\.itemNumber), ["5005376", "40416", "5006482", "75275"])
+        XCTAssertEqual(e.items.map(\.name), ["Star Wars Anniversary Pod", "Ice Skating Rink", "Holiday Gift Set 2020", "A-wing Starfighter"])
+        XCTAssertEqual(e.items.map(\.quantity), [nil, nil, nil, nil])
+        XCTAssertFalse(e.items.contains { $0.isFreeGift })  // no price shown is not "free"
+
+        let order = buildOrders(from: [e], timeZone: TimeZone(identifier: "UTC")!)[0]
+        XCTAssertEqual(order.status, "In Warehouse")
+        XCTAssertEqual(order.items.map(\.status), ["In Warehouse", "In Warehouse", "In Warehouse", "In Warehouse"])
+        XCTAssertEqual(order.orderDate, "December 4, 2020")  // the email's date, as nothing better is in it
+        XCTAssertEqual(order.itemCountListed, 4)
+
+        // A vague "update" subject defers to the body; a clear subject doesn't.
+        XCTAssertEqual(classifyEmail(subject: "Update on your LEGO Shop order", body: ["Your order has shipped"]), .shipped)
+        XCTAssertEqual(classifyEmail(subject: "Your order has shipped", body: ["It reached our warehouse"]), .shipped)
+        // Footer lines with a number first aren't items without the article-number line above.
+        XCTAssertTrue(parseArticleProductPairs(["2020 The LEGO Group.", "Thanks", "100 Print Shop Road"]).isEmpty)
     }
 
     func testCombiningEmailsIntoOrders() {
