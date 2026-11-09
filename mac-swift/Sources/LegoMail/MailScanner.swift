@@ -171,7 +171,7 @@ private func readPrefix(_ url: URL, bytes: Int) -> Data? {
 }
 
 /// Every PDF in a folder of saved receipts (e.g. from Mail's File > Save Attachments), read like
-/// a receipt email. The file name stands in for the subject ("LEGO® Shop Receipt 1326310304
+/// a receipt email. The file name stands in for the subject ("LEGO® Shop Receipt 5550001
 /// from 05_19_2022.pdf"), so the receipt number and date can come from it.
 public func scanReceiptFolder(_ folder: URL, saveTextDir: URL? = nil, stop: StopFlag = StopFlag(),
                               log: (String) -> Void = { _ in }) -> [LegoEmail] {

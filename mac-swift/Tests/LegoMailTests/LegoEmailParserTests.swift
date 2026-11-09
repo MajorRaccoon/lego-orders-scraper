@@ -469,7 +469,7 @@ final class LegoEmailParserTests: XCTestCase {
         Balance due $85.79
         Paid with Visa $85.79
         Become a LEGO® Insider!
-        Type in 744-26823494-10-25-24
+        Type in 744-00000001-10-25-24
         Cardholders copy
         Date/Time 10/25/24 4:32:12 PM
         Card ****
