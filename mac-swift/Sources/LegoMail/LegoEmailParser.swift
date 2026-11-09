@@ -177,9 +177,9 @@ public func classifyEmail(subject: String, body: [String] = []) -> LegoEmailKind
 
 // MARK: Money
 
-/// An amount with a currency mark: "$679.99", "-$20.00", "US$ 5.00", "£1,234.56", "€12,99".
+/// An amount with a currency mark: "$679.99", "-$20.00", "US$ 5.00", "USD 199.99", "£1,234.56", "€12,99".
 /// A minus counts only right next to the amount ("Titanic - $679.99" is not negative).
-let moneyPattern = "(-|−)?(?:US\\$|CA\\$|C\\$|A\\$|AU\\$|NZ\\$|\\$|£|€|¥|CHF\\s?|kr\\.?\\s?)\\s?(-)?(\\d{1,3}(?:[,.\\u00A0 ]\\d{3})*(?:[.,]\\d{2})|\\d+(?:[.,]\\d{2})?)"
+let moneyPattern = "(-|−)?(?:US\\$|CA\\$|C\\$|A\\$|AU\\$|NZ\\$|(?:USD|CAD|AUD|EUR|GBP)\\s?|\\$|£|€|¥|CHF\\s?|kr\\.?\\s?)\\s?(-)?(\\d{1,3}(?:[,.\\u00A0 ]\\d{3})*(?:[.,]\\d{2})|\\d+(?:[.,]\\d{2})?)"
 
 /// Every amount in a line, as the number text ("679.99", "-20.00"); currency marks dropped.
 func amounts(in line: String) -> [String] {
@@ -315,9 +315,12 @@ public func parseEmailItems(_ lines: [String]) -> [LegoOrderLine] {
         // "$0.00" is a free gift, like "Free".
         if !prices.isEmpty, prices.allSatisfy({ amountValue($0) == 0 }) { free = true; prices = [] }
 
-        var name = cleanItemName(a.name).trimmed
+        var name = cleanProductName(a.name)
         var number = a.number
         if number == nil { (name, number) = splitTrailingSetNumber(name) }
+        if number == nil, let m = MRx.search("^(\\d{4,8})\\s+(.*[A-Za-z].*)$", name), let n = m[1], let rest = m[2] {
+            (name, number) = (rest, n)  // "75275 A-wing Starfighter" (2020 confirmations)
+        }
         let isGiftCard = MRx.search("gift ?card|e-?gift", name) != nil
         items.append(LegoOrderLine(
             name: name, itemNumber: number, customID: customID, quantity: quantity,
@@ -493,7 +496,7 @@ private let summaryRules: [(key: String, pattern: String)] = [
     ("subtotal", "^(?:order\\s+|merchandise\\s+|item(?:s)?\\s+)?sub[- ]?total"),
     ("delivery", "^(?:standard\\s+|express\\s+)?(?:shipping|delivery|postage|shipping\\s*(?:&|and)\\s*handling)\\b"),
     ("tax", "^(?:estimated\\s+|sales\\s+)?(?:tax(?:es)?|vat|gst|hst)\\b"),
-    ("insiders_discount", "^(?:lego\\s*®?\\s*)?insiders\\s+(?:discount|reward|savings)"),
+    ("insiders_discount", "^(?:(?:lego\\s*®?\\s*)?insiders|vip)\\s+(?:discount|reward|savings)"),
     ("discount", "^(?:discount|promotion(?:al)?|promo(?:\\s*code)?|coupon|savings|you saved)\\b"),
     ("total", "^(?:order\\s+|grand\\s+|estimated\\s+|invoice\\s+)?total\\b(?!\\s*(?:items|savings|quantity|qty))"),
 ]
@@ -510,7 +513,28 @@ private func bareAmount(atEndOf line: String) -> String? {
 /// above the summary sometimes have their own "Total").
 public func parseEmailSummary(_ lines: [String]) -> OrderedStrings {
     var found: [String: String] = [:]
-    for (i, line) in lines.enumerated() {
+    func summaryKey(_ line: String) -> String? { summaryRules.first { MRx.search($0.pattern, line) != nil }?.key }
+    // Labels in a column, then their amounts in a column (2020 confirmations):
+    //     Sub Total / Shipping / VIP Discount / Tax / USD 199.99 / USD 0.00 / USD 0.00 / USD 14.50
+    var columnLines = Set<Int>()
+    var c = 0
+    while c < lines.count {
+        var j = c
+        while j < lines.count, summaryKey(lines[j]) != nil, amounts(in: lines[j]).isEmpty, bareAmount(atEndOf: lines[j]) == nil { j += 1 }
+        let count = j - c
+        if count >= 2, j + count <= lines.count, (j..<j + count).allSatisfy({ isOnlyAmount(lines[$0]) }) {
+            for n in 0..<count {
+                guard let key = summaryKey(lines[c + n]), var v = amounts(in: lines[j + n]).last else { continue }
+                if key.hasSuffix("discount"), !v.hasPrefix("-"), amountValue(v) != 0 { v = "-" + v }
+                if found[key] == nil || key == "total" { found[key] = v }
+            }
+            columnLines.formUnion(c..<j + count)
+            c = j + count
+        } else {
+            c = max(j, c + 1)
+        }
+    }
+    for (i, line) in lines.enumerated() where !columnLines.contains(i) {
         for (key, pattern) in summaryRules {
             guard MRx.search(pattern, line) != nil else { continue }
             if key != "total", found[key] != nil { break }
@@ -554,6 +578,11 @@ public func findOrderDate(_ lines: [String]) -> String? {
             if let d = normalizeDate(value) { return d }
         }
         if pattern == labelled {
+            // "...we have received your order placed on December 01 2020*." (mid-sentence)
+            for line in lines {
+                if let m = MRx.search("\\border\\s+(?:was\\s+)?placed\\s+on\\s+([A-Za-z]{3,9}\\.?\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}/\\d{1,2}/\\d{2,4})", line),
+                   let d = m[1].flatMap(normalizeDate) { return d }
+            }
             // A receipt's own date column, before falling back to a bare "Date:".
             for k in ["receipt date", "transaction date", "invoice date"] {
                 if let d = columns[k].flatMap(normalizeDate) { return d }

@@ -412,6 +412,44 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(two.map(\.isFreeGift), [false, true])
     }
 
+    /// A real 2020 order confirmation (as text, personal details replaced): "USD 199.99" prices,
+    /// the item number before the name, summary labels in one column and amounts in the next,
+    /// and the order date mid-sentence.
+    func testOlderOrderConfirmationEmail() {
+        let html = """
+        <p>LEGO.COM</p><p>Thank you for shopping with us!</p><p>Dear Customer,</p>
+        <p>This email is confirmation that we have received your order placed on December 01 2020*.</p>
+        <p>Order Confirmation</p><p>Order Number:</p><p>T100000006</p><p>VIP Number:</p><p>000000003</p>
+        <p>Shipping Address:</p><p>Sample Customer<br>1 Example St<br>Anytown, NC, 00000</p>
+        <table><tr><td>PRICE</td><td>QTY</td><td>TOTAL</td></tr>
+        <tr><td>5005376 Star Wars&trade; Anniversary Pod V46</td></tr><tr><td>USD 0.00</td><td>Qty: 1</td><td>Total: USD 0.00</td></tr>
+        <tr><td>75275 A-wing Starfighter&trade; V39</td></tr><tr><td>USD 199.99</td><td>Qty: 1</td><td>Total: USD 199.99</td></tr>
+        <tr><td>5006482 Holiday Gift Set 2020 V46</td></tr><tr><td>USD 0.00</td><td>Qty: 1</td><td>Total: USD 0.00</td></tr>
+        <tr><td>40416 Ice Skating Rink V39</td></tr><tr><td>USD 0.00</td><td>Qty: 1</td><td>Total: USD 0.00</td></tr></table>
+        <p>VIP points are applied to your account once the order has shipped from our warehouse.</p>
+        <table><tr><td>Sub Total<br>Shipping<br>VIP Discount<br>Tax</td><td>USD 199.99<br>USD 0.00<br>USD 0.00<br>USD 14.50</td></tr>
+        <tr><td>ORDER TOTAL</td><td>USD 214.49</td></tr></table>
+        <p>LEGO and the LEGO logo are trademarks of the LEGO Group. &copy; 2020 The LEGO Group.</p>
+        """
+        let raw = "From: LEGOShop.com <LEGOshop@e.LEGO.com>\nSubject: Thank you for your LEGO® Order T100000006\n"
+            + "Date: Tue, 1 Dec 2020 06:26:28 -0800\nContent-Type: text/html; charset=utf-8\n\n" + html
+        guard let e = parseLegoEmail(parseMail(Data(raw.utf8))) else { return XCTFail("email not read") }
+        XCTAssertEqual(e.orderNumber, "T100000006")
+        XCTAssertEqual(e.kind, .confirmation)
+        XCTAssertEqual(e.orderDate, "December 1, 2020")
+        XCTAssertEqual(e.items.map(\.name), ["Star Wars Anniversary Pod", "A-wing Starfighter", "Holiday Gift Set 2020", "Ice Skating Rink"])
+        XCTAssertEqual(e.items.map(\.itemNumber), ["5005376", "75275", "5006482", "40416"])
+        XCTAssertEqual(e.items.map(\.quantity), [1, 1, 1, 1])
+        XCTAssertEqual(e.items.map(\.isFreeGift), [true, false, true, true])
+        XCTAssertEqual(e.items[1].regularPrice, "199.99")
+        XCTAssertEqual(e.summary.keys, ["subtotal", "delivery", "tax", "insiders_discount", "total"])
+        XCTAssertEqual(e.summary["subtotal"], "199.99")
+        XCTAssertEqual(e.summary["tax"], "14.50")  // not the subtotal sitting right after the "Tax" label
+        XCTAssertEqual(e.summary["insiders_discount"], "0.00")
+        XCTAssertEqual(e.summary["total"], "214.49")
+        XCTAssertEqual(amounts(in: "USD 1,234.56"), ["1,234.56"])
+    }
+
     func testCombiningEmailsIntoOrders() {
         func line(_ name: String, _ number: String, _ price: String?) -> LegoOrderLine {
             LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: 1,
