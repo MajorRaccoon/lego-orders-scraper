@@ -1,0 +1,16 @@
+196
+From: Someone Else <friend@example.invalid>
+To: customer@example.invalid
+Subject: Dinner on Friday?
+Date: Wed, 2 Sep 2026 18:00:00 +0000
+Message-ID: <dinner@example.invalid>
+
+Are you free?
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>flags</key>
+	<integer>8590195713</integer>
+</dict>
+</plist>

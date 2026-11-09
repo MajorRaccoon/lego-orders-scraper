@@ -1,0 +1,24 @@
+747
+From: LEGO Shop <noreply@e.lego.com>
+To: customer@example.invalid
+Subject: Your LEGO order T100000001 is on its way!
+Date: Thu, 10 Sep 2026 09:30:00 -0400 (EDT)
+Message-ID: <ship-T100000001@e.lego.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: base64
+
+PGh0bWw+PGJvZHk+CjxwPkdvb2QgbmV3cyEgWW91ciBvcmRlciBpcyBvbiBpdHMgd2F5LjwvcD4K
+PHA+T3JkZXIgTnVtYmVyOiBUMTAwMDAwMDAxPC9wPgo8dGFibGU+PHRyPjx0ZD5UcmFja2luZyBu
+dW1iZXI6PC90ZD48dGQ+MVo5OTlBQTEwMTIzNDU2Nzg0PC90ZD48L3RyPjwvdGFibGU+Cjx0YWJs
+ZT48dHI+PHRkPkl0ZW1zIGluIHRoaXMgc2hpcG1lbnQ8L3RkPjwvdHI+Cjx0cj48dGQ+TEVHTyZy
+ZWc7IEljb25zIFRpdGFuaWM8L3RkPjwvdHI+PHRyPjx0ZD5JdGVtOiAxMDI5NDwvdGQ+PHRkPlF0
+eTogMTwvdGQ+PC90cj48L3RhYmxlPgo8L2JvZHk+PC9odG1sPgo=
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>flags</key>
+	<integer>8590195713</integer>
+</dict>
+</plist>

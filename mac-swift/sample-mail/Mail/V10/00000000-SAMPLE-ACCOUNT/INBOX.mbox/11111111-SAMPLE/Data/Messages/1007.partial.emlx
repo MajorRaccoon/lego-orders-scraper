@@ -1,0 +1,28 @@
+610
+From: LEGO Shop <noreply@e.lego.com>
+To: customer@example.invalid
+Subject: =?UTF-8?Q?LEGO=C2=AE_Shop__Receipt_5550002_from_11/01/2026?=
+Date: Sun, 1 Nov 2026 15:30:00 +0000
+Message-ID: <receipt-5550002@e.lego.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="MIX"
+
+--MIX
+Content-Type: text/plain; charset=utf-8
+
+Thank you for visiting the LEGO Store. Your receipt is attached.
+--MIX
+Content-Type: application/pdf; name="Receipt.pdf"
+Content-Disposition: attachment; filename*=utf-8''Receipt%205550002.pdf
+Content-Transfer-Encoding: base64
+X-Apple-Content-Length: 1024
+
+--MIX--
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>flags</key>
+	<integer>8590195713</integer>
+</dict>
+</plist>

@@ -1,0 +1,70 @@
+1903
+Return-Path: <bounce@e.lego.com>
+From: "LEGO Shop" <noreply@e.lego.com>
+To: Sample Customer <customer@example.invalid>
+Subject: =?UTF-8?Q?Your_LEGO=C2=AE_Shop_order_confirmation_T100000001?=
+Date: Mon, 7 Sep 2026 14:05:00 +0000
+Message-ID: <confirm-T100000001@e.lego.com>
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="REL"
+
+--REL
+Content-Type: multipart/alternative;
+ boundary="ALT"
+
+--ALT
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+Thank you for your order!
+Order Number: T100000001
+(View this email in a browser to see your items.)
+
+--ALT
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html><head><style>.hide{display:none}</style><title>Your order</title></he=
+ad>
+<body><table width=3D"600">
+<tr><td><h1>Thank you for your order!</h1></td></tr>
+<tr><td>Order Number: T100000001</td></tr>
+<tr><td>Order Date: September 7, 2026</td></tr>
+</table>
+<table>
+<tr><td><img src=3D"https://example.invalid/titanic.png" alt=3D"Titanic"></=
+td><td>LEGO&reg; Icons Titanic</td></tr>
+<tr><td>Item: 10294</td><td>Qty: 1</td><td>$679.99</td></tr>
+<tr><td>LEGO&reg; Technic&trade; Hub</td></tr>
+<tr><td>Item: 88012</td><td>Qty: 2</td><td><s>$59.99</s> $49.99</td><td>$99=
+.98</td></tr>
+<tr><td>Brick Calendar</td></tr>
+<tr><td>Item: 5008000</td><td>Qty: 1</td><td>FREE</td></tr>
+</table>
+<table>
+<tr><td>Subtotal</td><td>$779.97</td></tr>
+<tr><td>Shipping</td><td>FREE</td></tr>
+<tr><td>Tax</td><td>$48.75</td></tr>
+<tr><td>LEGO&reg; Insiders discount</td><td>-$20.00</td></tr>
+<tr><td>Order Total</td><td>$808.72</td></tr>
+</table>
+<p>Questions? Visit LEGO.com/service &amp; we'll help.</p>
+</body></html>
+
+--ALT--
+
+--REL
+Content-Type: image/png; name="logo.png"
+Content-Transfer-Encoding: base64
+Content-Disposition: inline; filename="logo.png"
+
+iVBORw0KGgo=
+--REL--
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>flags</key>
+	<integer>8590195713</integer>
+</dict>
+</plist>

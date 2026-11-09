@@ -220,6 +220,17 @@ To save the files somewhere else, use **Save files to → Browse…** at the top
 
 More details and troubleshooting: [`mac-swift/README-swift.md`](mac-swift/README-swift.md). The older Python-based Mac app is still in [`mac-app/`](mac-app/README-mac.md).
 
+### Reading orders from Apple Mail instead
+
+**LEGO Mail Orders** is a second Mac app in the same folder. Instead of logging in to LEGO.com, it finds your LEGO Shop emails in Apple Mail: order confirmations, PDF receipts, shipping and delivery notices, and cancellations. It saves them as `lego_mail_orders.json`, `.csv` and `.html`, in the same format. It needs **Full Disk Access** to read Mail's folder, or you can point it at emails you exported from Mail.
+
+```bash
+cd mac-swift
+./build_mail_app.sh
+```
+
+Full details: [`mac-swift/README-mail.md`](mac-swift/README-mail.md).
+
 ---
 
 ## 5. Windows app

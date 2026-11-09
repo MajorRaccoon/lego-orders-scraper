@@ -1,0 +1,64 @@
+From shop@e.lego.com Sun Mar  5 10:00:00 2023
+From: LEGO Shop <shop@e.lego.com>
+To: customer@example.invalid
+Subject: Your LEGO Shop order confirmation T099999999
+Date: Sun, 5 Mar 2023 10:00:00 +0000
+Message-ID: <confirm-T099999999@e.lego.com>
+Content-Type: text/plain; charset=utf-8
+
+Order Number: T099999999
+Order Date: March 5, 2023
+LEGO Creator Corner Garage
+Item: 10264
+Qty: 1
+$199.99
+Total: $213.99
+
+From shop@e.lego.com Fri Oct  2 20:15:00 2026
+From: LEGO Shop <shop@e.lego.com>
+To: customer@example.invalid
+Subject: Thank you for your LEGO order
+Date: Fri, 2 Oct 2026 20:15:00 +0000
+Message-ID: <confirm-T100000002@e.lego.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=iso-8859-1
+Content-Transfer-Encoding: quoted-printable
+
+Thanks for shopping with LEGO=AE!
+
+Order number: T100000002
+Order placed: 10/02/2026
+
+ITEM                         QTY   PRICE
+LEGO Botanicals Orchid
+Item #10311
+Quantity: 1
+Price: $49.99
+
+Pick a Brick 2x4 Brick Red
+Element ID: 300121
+Quantity: 10
+Price: $0.25
+Total: $2.50
+
+Subtotal: $52.49
+Shipping & Handling: $5.95
+Sales Tax: $3.68
+Total: $62.12
+
+From shop@e.lego.com Sat Oct  3 10:00:00 2026
+From: LEGO Shop <shop@e.lego.com>
+To: customer@example.invalid
+Subject: Part of your order T100000002 has been cancelled
+Date: Sat, 3 Oct 2026 10:00:00 +0000
+Message-ID: <cancel-T100000002@e.lego.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+We're sorry: this item is out of stock and was cancelled.
+>From now on you can check stock on LEGO.com.
+
+Pick a Brick 2x4 Brick Red
+Element ID: 300121
+Quantity: 10
+
