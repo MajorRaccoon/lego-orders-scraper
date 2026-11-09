@@ -1,0 +1,91 @@
+# Publishes a GitHub release with every app, built and checked from one commit:
+#   LEGO-Order-Scraper-macOS.zip          the LEGO.com Mac app (mac-swift/)
+#   LEGO-Mail-Orders-macOS.zip            the Apple Mail Mac app (mac-swift/)
+#   LEGO-Order-Scraper-Windows-x64.zip    the Windows app for most PCs (windows-app/)
+#   LEGO-Order-Scraper-Windows-arm64.zip  the Windows app for ARM PCs
+# The builds are the "macOS app" and "Windows app" workflows, run as they are (all their
+# tests and checks must pass), so a release never has an untested file.
+#
+# To release: Actions tab -> "Release" -> "Run workflow", give the tag (e.g. v1.3.0) and a
+# title. The notes come from release-notes/<tag>.md if it exists, else the "notes" box.
+# The SHA-256 checksums of the files are added at the end of the notes.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to create, e.g. v1.3.0"
+        required: true
+      title:
+        description: "Release title"
+        required: true
+      notes:
+        description: "Release notes (Markdown), used only if release-notes/<tag>.md doesn't exist"
+        required: false
+        default: ""
+
+permissions:
+  contents: write  # create the tag and the release
+
+jobs:
+  mac:
+    uses: ./.github/workflows/mac-app.yml
+
+  windows:
+    uses: ./.github/workflows/windows-app.yml
+
+  publish:
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check - the tag is new and well formed
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "tag must look like v1.3.0, got '$TAG'"; exit 1; }
+          if gh release view "$TAG" >/dev/null 2>&1; then echo "release $TAG already exists"; exit 1; fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect the files under their release names
+        run: |
+          mkdir release
+          cp artifacts/LEGO-Order-Scraper-macOS/LEGO-Order-Scraper-native-mac.zip release/LEGO-Order-Scraper-macOS.zip
+          cp artifacts/LEGO-Mail-Orders-macOS/LEGO-Mail-Orders-mac.zip release/LEGO-Mail-Orders-macOS.zip
+          cp artifacts/LEGO-Order-Scraper-windows-x64/LEGO-Order-Scraper-windows-x64.zip release/LEGO-Order-Scraper-Windows-x64.zip
+          cp artifacts/LEGO-Order-Scraper-windows-arm64/LEGO-Order-Scraper-windows-arm64.zip release/LEGO-Order-Scraper-Windows-arm64.zip
+          ls -l release
+
+      - name: Write the notes (with checksums)
+        env:
+          TAG: ${{ inputs.tag }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          if [ -f "release-notes/$TAG.md" ]; then cp "release-notes/$TAG.md" notes.md
+          elif [ -n "$NOTES" ]; then printf '%s\n' "$NOTES" > notes.md
+          else echo "No release-notes/$TAG.md and no notes given"; exit 1
+          fi
+          {
+            echo
+            echo "## Checksums (SHA-256)"
+            echo
+            echo '```'
+            (cd release && sha256sum *.zip)
+            echo '```'
+            echo
+            echo "Not affiliated with or endorsed by the LEGO Group."
+          } >> notes.md
+          cat notes.md
+
+      - name: Publish the release
+        env:
+          TAG: ${{ inputs.tag }}
+          TITLE: ${{ inputs.title }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$TAG" release/*.zip --target "$GITHUB_SHA" --title "$TITLE" --notes-file notes.md
