@@ -657,7 +657,10 @@ public func normalizeDate(_ s: String) -> String? {
     for format in ["MMMM d, yyyy", "MMM d, yyyy", "MMM. d, yyyy", "MMMM d yyyy", "d MMMM yyyy", "d MMM yyyy",
                    "MM/dd/yyyy", "M/d/yyyy", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy", "dd.MM.yyyy", "d.M.yyyy"] {
         f.dateFormat = format
-        if let d = f.date(from: t) { return formatOrderDate(d, timeZone: TimeZone(secondsFromGMT: 0)!) }
+        // "10/25/24" also parses as the year 24 with a four-digit-year format: skip such years.
+        if let d = f.date(from: t), Calendar(identifier: .gregorian).dateComponents(in: TimeZone(secondsFromGMT: 0)!, from: d).year ?? 0 >= 1950 {
+            return formatOrderDate(d, timeZone: TimeZone(secondsFromGMT: 0)!)
+        }
     }
     return nil
 }

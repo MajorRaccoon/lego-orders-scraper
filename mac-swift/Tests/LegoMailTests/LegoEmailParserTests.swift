@@ -505,6 +505,7 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(order.items.first?.status, "In-store purchase")
         XCTAssertEqual(order.url, ordersURL)
         XCTAssertEqual(normalizeDate("25.10.2024"), "October 25, 2024")
+        XCTAssertEqual(normalizeDate("10/25/24 4:32:12 PM"), "October 25, 2024")  // not the year 24
         XCTAssertEqual(dateInSubject("LEGO® Store Receipt LEGO0000000001 from 25.10.2024"), "October 25, 2024")
         // The address line above isn't an item: the line after it isn't a price.
         XCTAssertTrue(parseNumberNamePriceLines(["4325 GLENWOOD AVE STE 1078", "RALEIGH, 27612-4520, US"]).isEmpty)
