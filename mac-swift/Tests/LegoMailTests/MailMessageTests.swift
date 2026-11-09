@@ -132,6 +132,7 @@ final class MailMessageTests: XCTestCase {
         --X--
         """)
         XCTAssertEqual(m.pdfAttachments.map(\.name), ["LEGO® Receipt.pdf", "Other.PDF"])  // the empty one is skipped
+        XCTAssertEqual(m.pdfPartsWithoutData, ["kept-outside.pdf"])  // listed, but its bytes aren't in the email
         XCTAssertEqual(m.pdfAttachments.first?.data, Data("%PDF-1.4 fake".utf8))
         XCTAssertEqual(m.plainText.trimmed, "Receipt attached")
         XCTAssertNil(pdfText(Data("not a pdf".utf8)))

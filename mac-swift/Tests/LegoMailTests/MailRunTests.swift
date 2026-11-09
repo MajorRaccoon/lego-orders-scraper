@@ -37,6 +37,45 @@ final class MailRunTests: XCTestCase {
                       log.joined(separator: "\n"))
     }
 
+    /// A receipt email whose PDF Mail never downloaded (a .partial.emlx with no Attachments
+    /// folder): the run says so in the log and in the troubleshooting file.
+    func testReceiptPDFNotDownloadedIsReported() throws {
+        let messages = tmp.appendingPathComponent("Mail/Data/Messages")
+        try FileManager.default.createDirectory(at: messages, withIntermediateDirectories: true)
+        let msg = """
+        From: LEGOshop.com <no-reply-billing03@lego.com>\r
+        Subject: LEGO Shop  Receipt 5550009 from 06/06/2022\r
+        Date: Tue, 7 Jun 2022 05:54:48 +0200\r
+        Message-ID: <r9@lego.com>\r
+        Content-Type: multipart/mixed; boundary="B"\r
+        \r
+        --B\r
+        Content-Type: text/plain\r
+        \r
+        You'll find enclosed a copy of the invoice 5550009.\r
+        --B\r
+        Content-Type: application/pdf; name="5550009.pdf"\r
+        Content-Disposition: attachment; filename="5550009.pdf"\r
+        Content-Transfer-Encoding: base64\r
+        \r
+        --B--\r
+
+        """
+        let data = Data("\(msg.utf8.count)\n\(msg)<plist/>".utf8)
+        try data.write(to: messages.appendingPathComponent("77.partial.emlx"))
+
+        var log: [String] = []
+        let textDir = tmp.appendingPathComponent("text")
+        let result = scanMail(MailScanOptions(folder: tmp.appendingPathComponent("Mail"), saveTextDir: textDir)) { log.append($0) }
+        XCTAssertEqual(result.emails.map(\.orderNumber), ["5550009"])  // the receipt number, until the PDF is there
+        XCTAssertEqual(result.pdfsNotDownloaded, 1)
+        XCTAssertTrue(log.contains { $0.contains("1 email(s) whose PDF receipt Mail hasn't downloaded") }, log.joined(separator: "\n"))
+        XCTAssertTrue(log.contains { $0.contains("Download Attachments: All") })
+        let file = try XCTUnwrap(try FileManager.default.contentsOfDirectory(atPath: textDir.path).first)
+        let text = try String(contentsOf: textDir.appendingPathComponent(file))
+        XCTAssertTrue(text.contains("NOTE: This email lists 5550009.pdf, but the file isn't on this Mac"), text)
+    }
+
     func testFullRun() throws {
         let o = MailRunOptions(mailFolder: samples, outputDir: tmp)
         let orders = try runMailImport(o)

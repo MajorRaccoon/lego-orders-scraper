@@ -19,6 +19,8 @@ public struct MailMessage {
     /// PDF attachments (e.g. LEGO Shop receipts), as (file name, bytes). In Mail's .partial.emlx
     /// files the bytes are stored separately: see `externalAttachments(forMailFile:)`.
     public var pdfAttachments: [(name: String, data: Data)] = []
+    /// PDFs the email lists but doesn't contain (Mail keeps them elsewhere, or hasn't downloaded them).
+    public var pdfPartsWithoutData: [String] = []
 
     public init() {}
 
@@ -117,6 +119,7 @@ public func parseMail(_ data: Data) -> MailMessage {
     m.plainText = parts.plain.joined(separator: "\n\n")
     m.htmlText = parts.html.joined(separator: "\n")
     m.pdfAttachments = parts.pdfs
+    m.pdfPartsWithoutData = parts.emptyPDFs
     return m
 }
 
@@ -175,6 +178,7 @@ private struct CollectedParts {
     var plain: [String] = []
     var html: [String] = []
     var pdfs: [(name: String, data: Data)] = []
+    var emptyPDFs: [String] = []
 }
 
 private func collectText(headers: [(name: String, value: String)], body: String,
@@ -203,7 +207,8 @@ private func collectText(headers: [(name: String, value: String)], body: String,
     if type == "application/pdf" || fileName.lowercased().hasSuffix(".pdf") {
         // Empty in a .partial.emlx: Mail keeps the file in its Attachments folder instead.
         let bytes = decodeTransfer(body, headerValue(headers, "content-transfer-encoding"))
-        if !bytes.isEmpty { parts.pdfs.append((name: fileName.isEmpty ? "attachment.pdf" : fileName, data: bytes)) }
+        let name = fileName.isEmpty ? "attachment.pdf" : fileName
+        if bytes.isEmpty { parts.emptyPDFs.append(name) } else { parts.pdfs.append((name: name, data: bytes)) }
         return
     }
     guard type == "text/plain" || type == "text/html", disposition != "attachment" else { return }
@@ -220,13 +225,18 @@ func decodeRFC2231(_ s: String) -> String {
     return value.removingPercentEncoding ?? value
 }
 
+/// Where Mail keeps the attachments of ".../Messages/12345.partial.emlx": ".../Attachments/12345".
+public func attachmentsFolder(forMailFile file: URL) -> URL? {
+    let id = file.lastPathComponent.components(separatedBy: ".").first ?? ""
+    guard !id.isEmpty else { return nil }
+    return file.deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Attachments", isDirectory: true).appendingPathComponent(id, isDirectory: true)
+}
+
 /// PDFs that Mail saved outside a message file. For ".../Messages/12345.partial.emlx", Mail keeps
 /// the attachments in ".../Attachments/12345/<part>/<file name>".
 public func externalAttachments(forMailFile file: URL) -> [(name: String, data: Data)] {
-    let id = file.lastPathComponent.components(separatedBy: ".").first ?? ""
-    guard !id.isEmpty else { return [] }
-    let folder = file.deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Attachments", isDirectory: true).appendingPathComponent(id, isDirectory: true)
+    guard let folder = attachmentsFolder(forMailFile: file) else { return [] }
     guard let e = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil) else { return [] }
     var found: [(name: String, data: Data)] = []
     var paths: [URL] = []

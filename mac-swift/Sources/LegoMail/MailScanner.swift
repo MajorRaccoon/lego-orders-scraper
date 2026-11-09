@@ -61,6 +61,8 @@ public struct MailScanResult {
     /// PDF attachments (receipts) whose text was read, and ones that had no readable text.
     public var pdfsRead = 0
     public var pdfsUnreadable = 0
+    /// Emails that list a PDF receipt Mail hasn't downloaded to this Mac.
+    public var pdfsNotDownloaded = 0
 }
 
 /// Every mail file under `folder` (.emlx, .eml, mbox), in a stable order.
@@ -125,12 +127,20 @@ public func scanMail(_ o: MailScanOptions, stop: StopFlag = StopFlag(), log: (St
                 if let text = pdfText(pdf.data) { pdfTexts.append((name: pdf.name, text: text)); result.pdfsRead += 1 }
                 else { result.pdfsUnreadable += 1 }
             }
+            var missingPDFNote: String?
+            if pdfs.isEmpty, !message.pdfPartsWithoutData.isEmpty {
+                result.pdfsNotDownloaded += 1
+                let looked = kind == .emlx ? attachmentsFolder(forMailFile: file).map { " (looked in \($0.path))" } ?? "" : ""
+                missingPDFNote = "This email lists \(message.pdfPartsWithoutData.joined(separator: ", ")), but the file "
+                    + "isn't on this Mac\(looked). Mail hasn't downloaded it: open the email in Mail and click the "
+                    + "attachment, or set Mail > Settings > Accounts > Download Attachments to All, then run again."
+            }
 
             let email = parseLegoEmail(message, source: file.path, attachmentTexts: pdfTexts.map(\.text))
             if let email { result.emails.append(email) } else { result.withoutOrderNumber += 1 }
             if let dir = o.saveTextDir {
                 saved += 1
-                saveEmailText(message, email, pdfTexts: pdfTexts, file: file, number: saved, to: dir)
+                saveEmailText(message, email, pdfTexts: pdfTexts, note: missingPDFNote, file: file, number: saved, to: dir)
             }
         }
     }
@@ -138,8 +148,13 @@ public func scanMail(_ o: MailScanOptions, stop: StopFlag = StopFlag(), log: (St
     if result.withoutOrderNumber > 0 { summary += ", \(result.withoutOrderNumber) LEGO email(s) without an order number skipped" }
     if result.pdfsRead > 0 { summary += ", \(result.pdfsRead) PDF receipt(s) read" }
     if result.pdfsUnreadable > 0 { summary += ", \(result.pdfsUnreadable) PDF(s) with no readable text" }
+    if result.pdfsNotDownloaded > 0 { summary += ", \(result.pdfsNotDownloaded) email(s) whose PDF receipt Mail hasn't downloaded" }
     if result.unreadable > 0 { summary += ", \(result.unreadable) file(s) couldn't be read" }
     log(summary + ".")
+    if result.pdfsNotDownloaded > 0 {
+        log("  To read those receipts: in Mail, choose Settings > Accounts > (the account) > Download Attachments: All, "
+            + "let Mail finish downloading, then run again. (Or open each email and click its PDF.)")
+    }
     if let dir = o.saveTextDir, saved > 0 { log("Saved the text of \(saved) email(s) in \(dir.path)") }
     return result
 }
@@ -158,7 +173,7 @@ private func readPrefix(_ url: URL, bytes: Int) -> Data? {
 /// Troubleshooting copy of one email: its headers, both text versions, and what was read from it.
 /// Contains order details and your address, so share it only with someone you trust.
 func saveEmailText(_ m: MailMessage, _ email: LegoEmail?, pdfTexts: [(name: String, text: String)] = [],
-                   file: URL, number: Int, to dir: URL) {
+                   note: String? = nil, file: URL, number: Int, to dir: URL) {
     let day = m.date.map { d -> String in
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.string(from: d)
     } ?? "undated"
@@ -191,6 +206,7 @@ func saveEmailText(_ m: MailMessage, _ email: LegoEmail?, pdfTexts: [(name: Stri
     } else {
         out += "No LEGO order or receipt number found, so this email was skipped.\n"
     }
+    if let note { out += "\nNOTE: \(note)\n" }
     out += "\n===== Plain-text part =====\n\n" + (m.plainText.trimmed.isEmpty ? "(none)" : m.plainText)
     out += "\n\n===== HTML part, as text =====\n\n" + (m.htmlText.isEmpty ? "(none)" : htmlToText(m.htmlText)) + "\n"
     for pdf in pdfTexts { out += "\n===== PDF attachment \(pdf.name), as text =====\n\n\(pdf.text)\n" }

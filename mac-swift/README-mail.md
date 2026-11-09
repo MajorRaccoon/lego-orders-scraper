@@ -78,6 +78,7 @@ Emails such as "LEGO® Shop Receipt *(receipt number)* from *(date)*" carry the 
 - LEGO's receipt layout is supported: the item table (`Article  Product  Description  Quantity  Unit Price  Discount  Net Price  Net Amount`), where the Product column is the item number and a discount gives the sale price; the date column (`Order Date`, `Invoice No.`, …); and totals without a `$` sign. The part lines of a Minifigure Factory build (starting with `-`) are left out.
 - A receipt with no LEGO order number (for example from a LEGO Store) is saved under its **receipt number**, dated from the receipt or the subject. Its "View on LEGO.com" link opens My Orders.
 - A scanned PDF (a picture, with no text in it) can't be read. The log counts these as "PDF(s) with no readable text".
+- **Mail may not have downloaded the PDF.** For IMAP accounts (Gmail, iCloud and others), Mail often keeps only the email and fetches attachments when you open them. The log counts these as "email(s) whose PDF receipt Mail hasn't downloaded", and the troubleshooting file says so. To fix it, in Mail choose **Settings → Accounts →** *(the account)* **→ Download Attachments: All**, let Mail finish downloading, then run again. Or open each email and click its PDF.
 
 ## If orders come out wrong
 
