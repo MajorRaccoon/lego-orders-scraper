@@ -54,6 +54,13 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(classifyEmail(subject: "Hello", body: ["You can cancel it at any time."]), .other)
         XCTAssertEqual(classifyEmail(subject: "Update on your LEGO Shop order", body: ["Your order has been cancelled."]), .cancelled)
         XCTAssertEqual(classifyEmail(subject: "Cancellation confirmed"), .cancelled)
+        // LEGO's cancellation email has a vague subject; the body says what happened.
+        XCTAssertEqual(classifyEmail(subject: "We've got some new info about your LEGO® order T100000079",
+                                     body: ["We've cancelled your order",
+                                            "We wanted to let you know that we've cancelled one or more items from your LEGO.com order T100000079 just like you asked."]),
+                       .cancelled)
+        XCTAssertEqual(classifyEmail(subject: "We've got some new info about your LEGO® order T100000079",
+                                     body: ["Good news! Your order has shipped"]), .shipped)
         XCTAssertEqual(classifyEmail(subject: "Hello", body: ["See our cancellation policy"]), .other)
     }
 

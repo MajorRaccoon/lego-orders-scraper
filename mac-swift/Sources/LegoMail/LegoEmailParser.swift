@@ -182,8 +182,9 @@ public func classifyEmail(subject: String, body: [String] = []) -> LegoEmailKind
     }
     let fromSubject = kind(subject)
     let fromBody = kind(body.prefix(15).joined(separator: " "))
-    // A vague subject ("Update on your LEGO Shop order") says less than the email's first lines.
-    if MRx.search("\\bupdate\\b", subject) != nil {
+    // A vague subject ("Update on your LEGO Shop order", "We've got some new info about your LEGO
+    // order") says less than the email's first lines ("We've cancelled your order").
+    if MRx.search("\\bupdate\\b|new info(rmation)?\\b|news about", subject) != nil {
         // A delay notice ("If you're worried your order won't arrive in time...") changes nothing:
         // the order is still waiting (LEGO.com shows "Pre-order" or "Processing").
         if MRx.search("won'?t arrive in time|(is|are|been|be) delayed|later than (we )?(expected|planned)",
