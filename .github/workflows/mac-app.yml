@@ -115,8 +115,8 @@ jobs:
           orders = json.load(open(sys.argv[1]))
           nums = [o["order_number"] for o in orders]
           print("orders:", nums)
-          assert nums == ["5550002", "T100000003", "T100000004", "T100000002", "T100000001", "T099999999"], nums
-          t1 = orders[4]
+          assert nums == ["T100000003", "T100000004", "T100000002", "T100000001", "T099999999"], nums
+          t1 = orders[3]
           assert t1["status"] == "Delivered" and t1["total"] == "808.72", t1
           assert [i["item_number"] for i in t1["items"]] == ["10294", "88012", "5008000"], t1["items"]
           PY

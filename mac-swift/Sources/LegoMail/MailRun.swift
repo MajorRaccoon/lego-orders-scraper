@@ -29,6 +29,9 @@ public struct MailRunOptions {
     }
 }
 
+/// True for an order whose number starts with "T" (a LEGO.com order, e.g. T514535382).
+public func isTOrder(_ order: LegoOrder) -> Bool { order.orderNumber.hasPrefix("T") }
+
 public struct MailRunError: Error, CustomStringConvertible {
     public let description: String
 }
@@ -48,6 +51,14 @@ public func runMailImport(_ o: MailRunOptions, stop: StopFlag = StopFlag(), log:
     }
 
     var orders = buildOrders(from: emails)
+    // Only LEGO.com orders, whose numbers start with "T". Orders saved under a receipt or store
+    // transaction number instead (LEGO Store purchases, receipts whose PDF wasn't read) are left out.
+    let notT = orders.filter { !isTOrder($0) }
+    if !notT.isEmpty {
+        orders.removeAll { !isTOrder($0) }
+        let shown = notT.prefix(10).map(\.orderNumber).joined(separator: ", ")
+        log("Left out \(notT.count) order(s) without a LEGO.com order number (T...): \(shown)\(notT.count > 10 ? ", ..." : "").")
+    }
     if let since = o.since {
         let before = orders.count
         orders = orders.filter { !isBeforeSinceDate($0, since) }
@@ -57,6 +68,7 @@ public func runMailImport(_ o: MailRunOptions, stop: StopFlag = StopFlag(), log:
     var previous: [LegoOrder] = []
     if !o.fresh, FileManager.default.fileExists(atPath: o.jsonURL.path) {
         do { previous = try loadOrders(o.jsonURL) } catch { log("  (couldn't read the earlier \(o.jsonURL.lastPathComponent), starting fresh: \(error))") }
+        previous.removeAll { !isTOrder($0) }  // e.g. store receipts saved by an earlier version
     }
     let all = mergeMailOrders(orders, previous: previous)
     let kept = all.count - orders.count
