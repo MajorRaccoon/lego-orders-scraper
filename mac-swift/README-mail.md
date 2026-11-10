@@ -50,6 +50,7 @@ Don't want to grant that? Export the emails instead: in Mail, select your LEGO e
 | **Only orders placed on or after** | Skip older orders (and older emails, which makes it faster). |
 | **Also make an HTML report** | Writes `lego_mail_orders.html`. |
 | **Leave out tracking numbers** | Tracking numbers are left blank in every file. |
+| **Exclude orders with 0 item(s)** | Off by default. When on, orders whose emails gave no items aren't written to the JSON, CSV or HTML (the log lists them). Same as `lego-mail --exclude-empty`. |
 | **Start fresh** | Normally, orders found by an earlier run are kept even if their emails have since been deleted. This forgets them. |
 | **Receipt PDFs (optional)** | A folder of receipt PDFs saved from Mail (**File → Save Attachments…**), for receipts Mail hasn't downloaded. |
 | **Save matched emails for troubleshooting** | Saves every LEGO order email as a text file, with what the app read from it. See below. |

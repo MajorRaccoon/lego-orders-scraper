@@ -96,6 +96,8 @@ struct MailContentView: View {
                             .padding(.leading, 20)
                         Toggle("Also make an HTML report", isOn: $model.makeHTML)
                         Toggle("Leave out tracking numbers", isOn: $model.leaveOutTracking)
+                        Toggle("Exclude orders with 0 item(s)", isOn: $model.excludeEmptyOrders)
+                            .help("Orders whose emails gave no items aren't written to the JSON, CSV and HTML files.")
                         Toggle("Start fresh (forget orders from earlier runs)", isOn: $model.fresh)
                             .help("Normally, orders found in an earlier run are kept even if their emails have since been deleted.")
                         Toggle("Save matched emails for troubleshooting", isOn: $model.saveEmailText)
