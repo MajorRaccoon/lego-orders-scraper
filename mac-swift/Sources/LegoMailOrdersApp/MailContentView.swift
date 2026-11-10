@@ -101,7 +101,24 @@ struct MailContentView: View {
                         Toggle("Start fresh (forget orders from earlier runs)", isOn: $model.fresh)
                             .help("Normally, orders found in an earlier run are kept even if their emails have since been deleted.")
                         Toggle("Save matched emails for troubleshooting", isOn: $model.saveEmailText)
-                            .help("Saves the text of every LEGO order email to a mail-text folder in the data folder, with what the app read from it. Contains your order details and address.")
+                            .help("Saves the text of every LEGO order email, with what the app read from it. Contains your order details and address.")
+                        if model.saveEmailText {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("In \(model.display(model.matchedEmailsBase))")
+                                    .font(.callout)
+                                    .lineLimit(2).truncationMode(.middle)
+                                    .textSelection(.enabled)
+                                HStack {
+                                    Button("Browse…") { model.chooseMatchedEmailsFolder() }
+                                    Button("Same as Save files to") { model.resetMatchedEmailsFolder() }
+                                        .disabled(model.matchedEmailsParent == nil)
+                                }
+                                Text("Each run makes a new folder there: \(matchedEmailsFolderPrefix)1, \(matchedEmailsFolderPrefix)2, …")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.leading, 20)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(6)

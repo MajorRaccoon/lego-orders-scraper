@@ -16,6 +16,17 @@ final class MailRunTests: XCTestCase {
     }
     override func tearDownWithError() throws { try? FileManager.default.removeItem(at: tmp) }
 
+    func testMatchedEmailsFoldersAreNumbered() throws {
+        let fm = FileManager.default
+        XCTAssertEqual(nextMatchedEmailsFolder(in: tmp).lastPathComponent, "matched-emails-1")
+        try fm.createDirectory(at: tmp.appendingPathComponent("matched-emails-1"), withIntermediateDirectories: true)
+        XCTAssertEqual(nextMatchedEmailsFolder(in: tmp).lastPathComponent, "matched-emails-2")
+        try fm.createDirectory(at: tmp.appendingPathComponent("matched-emails-9"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: tmp.appendingPathComponent("matched-emails-old"), withIntermediateDirectories: true)
+        XCTAssertEqual(nextMatchedEmailsFolder(in: tmp).lastPathComponent, "matched-emails-10")
+        XCTAssertEqual(nextMatchedEmailsFolder(in: tmp.appendingPathComponent("missing")).lastPathComponent, "matched-emails-1")
+    }
+
     func testScanFindsEachLegoEmailOnce() throws {
         var log: [String] = []
         let result = scanMail(MailScanOptions(folder: samples, saveTextDir: tmp.appendingPathComponent("text"))) { log.append($0) }
