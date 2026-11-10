@@ -20,6 +20,8 @@ public struct MailRunOptions {
     public var saveTextDir: URL?
     /// Optional folder of receipt PDFs saved from Mail (File > Save Attachments), read as receipts.
     public var receiptFolder: URL?
+    /// "Exclude orders with 0 item(s)": leave orders with no items out of the JSON, CSV and HTML.
+    public var excludeEmptyOrders = false
 
     public init(mailFolder: URL, outputDir: URL, makeHTML: Bool = true) {
         self.mailFolder = mailFolder
@@ -70,9 +72,18 @@ public func runMailImport(_ o: MailRunOptions, stop: StopFlag = StopFlag(), log:
         do { previous = try loadOrders(o.jsonURL) } catch { log("  (couldn't read the earlier \(o.jsonURL.lastPathComponent), starting fresh: \(error))") }
         previous.removeAll { !isTOrder($0) }  // e.g. store receipts saved by an earlier version
     }
-    let all = mergeMailOrders(orders, previous: previous)
+    var all = mergeMailOrders(orders, previous: previous)
     let kept = all.count - orders.count
     if kept > 0 { log("Kept \(kept) order(s) from the earlier run that weren't found in the mail this time.") }
+    if o.excludeEmptyOrders {
+        let empty = all.filter { $0.items.isEmpty }
+        if !empty.isEmpty {
+            all.removeAll { $0.items.isEmpty }
+            let shown = empty.prefix(10).map(\.orderNumber).joined(separator: ", ")
+            log("Left out \(empty.count) order(s) with 0 items (\"Exclude orders with 0 item(s)\" is on): "
+                + "\(shown)\(empty.count > 10 ? ", ..." : "").")
+        }
+    }
 
     try FileManager.default.createDirectory(at: o.jsonURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     try writeOutputs(all, json: o.jsonURL, csv: o.csvURL, quiet: true, includeTracking: o.includeTracking, log: log)

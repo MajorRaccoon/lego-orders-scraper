@@ -19,6 +19,7 @@ lego_mail_orders.json, lego_mail_orders.csv and lego_mail_orders.html.
   --since MM/DD/YYYY    Only orders placed on or after this date ('all' = no cutoff, the default)
   --no-html             Don't write the HTML report
   --no-tracking         Leave tracking numbers out of the files
+  --exclude-empty       Leave orders with 0 items out of the files
   --fresh               Don't keep orders from an earlier run that aren't in the mail any more
   --save-email-text DIR Save the text of every LEGO order email in DIR (for troubleshooting)
   --pdf-dir DIR         Also read every receipt PDF in DIR (e.g. saved with Mail's File > Save Attachments)
@@ -62,7 +63,7 @@ var mailDir = defaultMailFolder
 var outputDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     .appendingPathComponent("LEGO Order Scraper", isDirectory: true)
 var since: SimpleDate?
-var makeHTML = true, includeTracking = true, fresh = false
+var makeHTML = true, includeTracking = true, fresh = false, excludeEmpty = false
 var saveText: URL?
 var pdfDir: URL?
 
@@ -80,6 +81,7 @@ while !args.isEmpty {
         do { since = try parseSinceDate(value(a)) } catch { fail("\(error)") }
     case "--no-html": makeHTML = false
     case "--no-tracking": includeTracking = false
+    case "--exclude-empty": excludeEmpty = true
     case "--fresh": fresh = true
     case "--save-email-text": saveText = folder(value(a))
     case "--pdf-dir": pdfDir = folder(value(a))
@@ -93,6 +95,7 @@ while !args.isEmpty {
 var o = MailRunOptions(mailFolder: mailDir, outputDir: outputDir, makeHTML: makeHTML)
 o.since = since
 o.includeTracking = includeTracking
+o.excludeEmptyOrders = excludeEmpty
 o.fresh = fresh
 o.saveTextDir = saveText
 o.receiptFolder = pdfDir

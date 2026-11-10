@@ -23,6 +23,7 @@ final class MailAppModel: ObservableObject {
     @Published var sinceDate: Date { didSet { defaults.set(sinceDate, forKey: "sinceDate") } }
     @Published var makeHTML: Bool { didSet { defaults.set(makeHTML, forKey: "makeHTML") } }
     @Published var leaveOutTracking: Bool { didSet { defaults.set(leaveOutTracking, forKey: "leaveOutTracking") } }
+    @Published var excludeEmptyOrders: Bool { didSet { defaults.set(excludeEmptyOrders, forKey: "excludeEmptyOrders") } }
     @Published var saveEmailText: Bool { didSet { defaults.set(saveEmailText, forKey: "saveEmailText") } }
     @Published var fresh = false
     /// Where the JSON, CSV and HTML files are saved. Defaults to dataDir.
@@ -56,6 +57,7 @@ final class MailAppModel: ObservableObject {
         sinceDate = d.object(forKey: "sinceDate") as? Date ?? defaultSinceDate.toDate()
         makeHTML = d.object(forKey: "makeHTML") as? Bool ?? true
         leaveOutTracking = d.object(forKey: "leaveOutTracking") as? Bool ?? false
+        excludeEmptyOrders = d.object(forKey: "excludeEmptyOrders") as? Bool ?? false  // unchecked by default
         saveEmailText = d.object(forKey: "saveEmailText") as? Bool ?? false
         outputDir = d.string(forKey: "outputDir").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? MailAppModel.defaultDataDir
         mailFolder = d.string(forKey: "mailFolder").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? defaultMailFolder
@@ -122,6 +124,7 @@ final class MailAppModel: ObservableObject {
         var o = MailRunOptions(mailFolder: mailFolder, outputDir: outputDir, makeHTML: makeHTML)
         o.since = useSinceDate ? SimpleDate(sinceDate) : nil
         o.includeTracking = !leaveOutTracking
+        o.excludeEmptyOrders = excludeEmptyOrders
         o.fresh = fresh
         o.receiptFolder = receiptFolder
         let stamp = ISO8601DateFormatter().string(from: Date())

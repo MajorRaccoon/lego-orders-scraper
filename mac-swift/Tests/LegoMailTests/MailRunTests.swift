@@ -212,6 +212,52 @@ final class MailRunTests: XCTestCase {
         XCTAssertTrue(orders.allSatisfy(isTOrder))
     }
 
+    /// "Exclude orders with 0 item(s)": off by default; when on, an order whose emails gave no
+    /// items is left out of the JSON, CSV and HTML.
+    func testExcludeOrdersWithNoItems() throws {
+        let mail = tmp.appendingPathComponent("mail")
+        try FileManager.default.createDirectory(at: mail, withIntermediateDirectories: true)
+        try """
+        From: LEGO Shop <noreply@e.lego.com>
+        Subject: Thank you for your order T123456781
+        Date: Mon, 7 Sep 2026 14:05:00 +0000
+        Message-ID: <a@e.lego.com>
+
+        LEGO Icons Bonsai Tree
+        Item: 10281
+        Qty: 1
+        $49.99
+        Total: $53.11
+        """.write(to: mail.appendingPathComponent("with-items.eml"), atomically: true, encoding: .utf8)
+        try """
+        From: LEGO Shop <noreply@e.lego.com>
+        Subject: Your LEGO order T123456782 has been delivered
+        Date: Tue, 8 Sep 2026 14:05:00 +0000
+        Message-ID: <b@e.lego.com>
+
+        Your package was delivered today.
+        """.write(to: mail.appendingPathComponent("no-items.eml"), atomically: true, encoding: .utf8)
+
+        var o = MailRunOptions(mailFolder: mail, outputDir: tmp.appendingPathComponent("default"))
+        XCTAssertFalse(o.excludeEmptyOrders)  // unchecked by default
+        XCTAssertEqual(Set(try runMailImport(o).map(\.orderNumber)), ["T123456781", "T123456782"])
+
+        let out = tmp.appendingPathComponent("excluded")
+        o = MailRunOptions(mailFolder: mail, outputDir: out)
+        o.excludeEmptyOrders = true
+        var log: [String] = []
+        let orders = try runMailImport(o) { log.append($0) }
+        XCTAssertEqual(orders.map(\.orderNumber), ["T123456781"])
+        XCTAssertTrue(log.contains { $0.contains("Left out 1 order(s) with 0 items (\"Exclude orders with 0 item(s)\" is on): T123456782.") },
+                      log.joined(separator: "\n"))
+        XCTAssertEqual(try loadOrders(out.appendingPathComponent(mailJSONName)).map(\.orderNumber), ["T123456781"])
+        for name in [mailCSVName, mailHTMLName] {
+            let text = try String(contentsOf: out.appendingPathComponent(name))
+            XCTAssertTrue(text.contains("T123456781"), name)
+            XCTAssertFalse(text.contains("T123456782"), name)
+        }
+    }
+
     func testNoTrackingAndMissingFolder() throws {
         var o = MailRunOptions(mailFolder: samples, outputDir: tmp)
         o.includeTracking = false
