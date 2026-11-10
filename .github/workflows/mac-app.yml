@@ -68,13 +68,21 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           printf '%s' "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -f pkcs12 -k "$KEYCHAIN" -T /usr/bin/codesign -T /usr/bin/security
           rm -f "$RUNNER_TEMP/cert.p12"
+          # What the .p12 held (counts only - never names or contents).
+          certs=$(security find-certificate -a "$KEYCHAIN" 2>/dev/null | grep -c '^keychain:' || true)
+          keys=$(security dump-keychain "$KEYCHAIN" 2>/dev/null | grep -c 'class: 0x00000010' || true)
+          echo "Imported $certs certificate(s) and $keys private key(s)."
+          if [[ "$keys" -eq 0 ]]; then
+            echo "::error::MACOS_CERT_P12_DEV has the certificate but not its private key, so nothing can be signed with it. In Keychain Access, open 'My Certificates', expand your 'Apple Development' certificate, select the certificate and the key under it together, choose File > Export Items as .p12, then update the secret with: base64 -i cert.p12 | pbcopy"
+            exit 1
+          fi
           # Let codesign use the key without a password prompt.
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           security find-identity -v -p codesigning "$KEYCHAIN" | grep -qF "\"$IDENTITY\"" \
-            || { echo "the certificate in MACOS_CERT_P12_DEV doesn't match MACOS_CERT_DEV_SIGN_IDENTITY (or has no private key)"; exit 1; }
+            || { echo "::error::No valid signing identity named like MACOS_CERT_DEV_SIGN_IDENTITY in MACOS_CERT_P12_DEV. Check the name (security find-identity -v -p codesigning on your Mac). Valid identities found: $(security find-identity -v -p codesigning "$KEYCHAIN" | tail -1)"; exit 1; }
           echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
           echo "Signing certificate imported."
 
