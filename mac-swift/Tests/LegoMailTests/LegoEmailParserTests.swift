@@ -546,4 +546,50 @@ final class LegoEmailParserTests: XCTestCase {
         let kept = mergeMailOrders([orders[1]], previous: [orders[0], orders[1]])
         XCTAssertEqual(kept.map(\.orderNumber), ["T123456782", "T123456781"])
     }
+
+    func testSplitShipmentReceiptsAreAddedUp() {
+        func line(_ name: String, _ number: String?) -> LegoOrderLine {
+            LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: 1, prices: emptyPrices(),
+                          isFreeGift: false, isPiece: false, isGiftCard: false, status: nil, trackingNumber: nil)
+        }
+        let day: (Int) -> Date = { Date(timeIntervalSince1970: 1_788_000_000 + Double($0) * 86_400) }
+        func receipt(_ r: String, _ d: Int, _ items: [LegoOrderLine], _ sub: String, _ tax: String, _ total: String) -> LegoEmail {
+            LegoEmail(orderNumber: "T100000077", kind: .confirmation, subject: "LEGO Shop Receipt \(r)", sentDate: day(d), orderDate: nil,
+                      items: items, summary: OrderedStrings([("subtotal", sub), ("tax", tax), ("total", total)]),
+                      trackingNumbers: [], source: "", receiptNumber: r)
+        }
+        let r1 = receipt("5550071", 1, [line("Small set", "30001")], "5.99", "0.43", "6.42")
+        let r2 = receipt("5550072", 3, [line("Big set", "10001"), line("Medium set", "10002")], "299.98", "21.76", "321.74")
+        let r2again = receipt("5550072", 4, [line("Big set", "10001")], "299.98", "21.76", "321.74")  // same receipt, saved PDF
+        let shipped = LegoEmail(orderNumber: "T100000077", kind: .shipped, subject: "", sentDate: day(5), orderDate: nil,
+                                items: [], summary: OrderedStrings(), trackingNumbers: [], source: "")
+        let order = buildOrders(from: [r2, shipped, r1, r2again], timeZone: TimeZone(identifier: "UTC")!)[0]
+        XCTAssertEqual(order.total, "328.16")
+        XCTAssertEqual(order.summary["subtotal"], "305.97")
+        XCTAssertEqual(order.summary["tax"], "22.19")
+        XCTAssertEqual(Set(order.items.compactMap(\.itemNumber)), ["30001", "10001", "10002"])
+
+        // An order confirmation's total is the whole order: it wins over the receipts.
+        let confirm = LegoEmail(orderNumber: "T100000077", kind: .confirmation, subject: "", sentDate: day(0), orderDate: nil,
+                                items: [], summary: OrderedStrings([("total", "328.16")]), trackingNumbers: [], source: "")
+        XCTAssertEqual(buildOrders(from: [r1, confirm], timeZone: TimeZone(identifier: "UTC")!)[0].total, "328.16")
+
+        // A cut-short name in a PDF is the same item as the full name.
+        XCTAssertEqual(buildOrders(from: [
+            receipt("5550073", 1, [line("Millennium Falcon Ultimate Coll...", nil)], "1", "0", "1"),
+            receipt("5550074", 2, [line("Millennium Falcon Ultimate Collector Series", nil)], "1", "0", "1"),
+        ], timeZone: TimeZone(identifier: "UTC")!)[0].items.count, 1)
+    }
+
+    func testCancelledOrderTotalIsZero() {
+        let day: (Int) -> Date = { Date(timeIntervalSince1970: 1_788_000_000 + Double($0) * 86_400) }
+        let confirm = LegoEmail(orderNumber: "T100000078", kind: .confirmation, subject: "", sentDate: day(0), orderDate: nil,
+                                items: [], summary: OrderedStrings([("total", "450.43")]), trackingNumbers: [], source: "")
+        let cancel = LegoEmail(orderNumber: "T100000078", kind: .cancelled, subject: "", sentDate: day(1), orderDate: nil,
+                               items: [], summary: OrderedStrings(), trackingNumbers: [], source: "")
+        let order = buildOrders(from: [confirm, cancel], timeZone: TimeZone(identifier: "UTC")!)[0]
+        XCTAssertEqual(order.status, "Cancelled")
+        XCTAssertEqual(order.total, "0.00")
+        XCTAssertEqual(order.summary["total"], "450.43")  // what it would have cost
+    }
 }
