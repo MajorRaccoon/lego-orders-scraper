@@ -47,6 +47,14 @@ final class LegoEmailParserTests: XCTestCase {
         for (subject, kind) in cases { XCTAssertEqual(classifyEmail(subject: subject), kind, subject) }
         XCTAssertEqual(classifyEmail(subject: "Hello", body: ["Your order has shipped"]), .shipped)
         XCTAssertEqual(LegoEmailKind.cancelled.status, "Cancelled")
+        // A delay notice only offers to cancel: the order isn't cancelled.
+        let delay = ["Hi Sample,", "We wanted to let you know your order is taking longer than usual.",
+                     "If you're worried your order won't arrive in time and you want to make a change or cancel it, get in touch with us and we'll be happy to help."]
+        XCTAssertEqual(classifyEmail(subject: "Here's an important update on your LEGO® order", body: delay), .other)
+        XCTAssertEqual(classifyEmail(subject: "Hello", body: ["You can cancel it at any time."]), .other)
+        XCTAssertEqual(classifyEmail(subject: "Update on your LEGO Shop order", body: ["Your order has been cancelled."]), .cancelled)
+        XCTAssertEqual(classifyEmail(subject: "Cancellation confirmed"), .cancelled)
+        XCTAssertEqual(classifyEmail(subject: "Hello", body: ["See our cancellation policy"]), .other)
     }
 
     func testAmounts() {

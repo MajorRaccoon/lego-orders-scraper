@@ -164,7 +164,8 @@ public func dateInSubject(_ subject: String) -> String? {
 /// Which kind of email this is, from its subject (or, failing that, the first lines of the body).
 public func classifyEmail(subject: String, body: [String] = []) -> LegoEmailKind {
     func kind(_ s: String) -> LegoEmailKind {
-        if MRx.search("cancel", s) != nil { return .cancelled }
+        // "has been cancelled", "Order canceled", "Cancellation confirmed" - not "you can cancel it".
+        if MRx.search("cancell?ed|cancellation(?!\\s+polic)", s) != nil { return .cancelled }
         if MRx.search("refund", s) != nil { return .refunded }
         if MRx.search("\\breturn(ed)?\\b", s) != nil && MRx.search("return(s)? policy", s) == nil { return .returned }
         if MRx.search("\\b(has been |was |been )?delivered\\b", s) != nil
@@ -182,7 +183,13 @@ public func classifyEmail(subject: String, body: [String] = []) -> LegoEmailKind
     let fromSubject = kind(subject)
     let fromBody = kind(body.prefix(15).joined(separator: " "))
     // A vague subject ("Update on your LEGO Shop order") says less than the email's first lines.
-    if MRx.search("\\bupdate\\b", subject) != nil, fromBody != .other { return fromBody }
+    if MRx.search("\\bupdate\\b", subject) != nil {
+        // A delay notice ("If you're worried your order won't arrive in time...") changes nothing:
+        // the order is still waiting (LEGO.com shows "Pre-order" or "Processing").
+        if MRx.search("won'?t arrive in time|(is|are|been|be) delayed|later than (we )?(expected|planned)",
+                      body.prefix(15).joined(separator: " ").replacingOccurrences(of: "\u{2019}", with: "'")) != nil { return .other }
+        if fromBody != .other { return fromBody }
+    }
     return fromSubject != .other ? fromSubject : fromBody
 }
 
