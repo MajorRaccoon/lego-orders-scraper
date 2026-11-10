@@ -109,3 +109,17 @@ public func runMailImport(_ o: MailRunOptions, stop: StopFlag = StopFlag(), log:
     }
     return all
 }
+
+/// Base name of the troubleshooting folders: matched-emails-1, matched-emails-2, ...
+public let matchedEmailsFolderPrefix = "matched-emails-"
+
+/// The next free numbered folder in `parent`: matched-emails-1 the first time, then one more than
+/// the highest number already there, so each run gets its own folder and the newest has the highest number.
+public func nextMatchedEmailsFolder(in parent: URL) -> URL {
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
+    let used = names.compactMap { name -> Int? in
+        guard name.hasPrefix(matchedEmailsFolderPrefix) else { return nil }
+        return Int(name.dropFirst(matchedEmailsFolderPrefix.count))
+    }
+    return parent.appendingPathComponent("\(matchedEmailsFolderPrefix)\((used.max() ?? 0) + 1)", isDirectory: true)
+}

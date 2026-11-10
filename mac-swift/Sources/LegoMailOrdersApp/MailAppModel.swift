@@ -28,6 +28,8 @@ final class MailAppModel: ObservableObject {
     @Published var fresh = false
     /// Where the JSON, CSV and HTML files are saved. Defaults to dataDir.
     @Published var outputDir: URL { didSet { defaults.set(outputDir.path, forKey: "outputDir"); refreshFiles() } }
+    /// Where the matched-emails-N folders go. nil = the "Save files to" folder.
+    @Published var matchedEmailsParent: URL? { didSet { defaults.set(matchedEmailsParent?.path, forKey: "matchedEmailsFolder") } }
     /// Optional folder of receipt PDFs saved from Mail (File > Save Attachments).
     @Published var receiptFolder: URL? { didSet { defaults.set(receiptFolder?.path, forKey: "receiptFolder") } }
     /// Which mail to read. Defaults to Apple Mail's own folder.
@@ -47,6 +49,8 @@ final class MailAppModel: ObservableObject {
     var csvURL: URL { outputDir.appendingPathComponent(mailCSVName) }
     var htmlURL: URL { outputDir.appendingPathComponent(mailHTMLName) }
     var isDefaultOutputDir: Bool { outputDir.standardizedFileURL.path == dataDir.standardizedFileURL.path }
+    /// The folder the next run's matched-emails-N folder goes in.
+    var matchedEmailsBase: URL { matchedEmailsParent ?? outputDir }
     var isDefaultMailFolder: Bool { mailFolder.standardizedFileURL.path == defaultMailFolder.standardizedFileURL.path }
     let logFile: URL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Logs/LEGO Mail Orders.log")
@@ -62,6 +66,7 @@ final class MailAppModel: ObservableObject {
         outputDir = d.string(forKey: "outputDir").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? MailAppModel.defaultDataDir
         mailFolder = d.string(forKey: "mailFolder").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? defaultMailFolder
         receiptFolder = d.string(forKey: "receiptFolder").map { URL(fileURLWithPath: $0, isDirectory: true) }
+        matchedEmailsParent = d.string(forKey: "matchedEmailsFolder").map { URL(fileURLWithPath: $0, isDirectory: true) }
         try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
         refreshFiles()
         checkAccess()
@@ -128,7 +133,15 @@ final class MailAppModel: ObservableObject {
         o.fresh = fresh
         o.receiptFolder = receiptFolder
         let stamp = ISO8601DateFormatter().string(from: Date())
-        o.saveTextDir = saveEmailText ? dataDir.appendingPathComponent("mail-text/\(stamp.replacingOccurrences(of: ":", with: "-"))") : nil
+        if saveEmailText {
+            do {
+                try FileManager.default.createDirectory(at: matchedEmailsBase, withIntermediateDirectories: true)
+            } catch {
+                status = "Can't use the folder \(display(matchedEmailsBase)) for the matched emails: \(error.localizedDescription) Choose another one."
+                return
+            }
+            o.saveTextDir = nextMatchedEmailsFolder(in: matchedEmailsBase)
+        }
 
         let flag = StopFlag()
         stopFlag = flag
@@ -139,6 +152,7 @@ final class MailAppModel: ObservableObject {
         append("LEGO Mail Orders v\(legoMailVersion)")
         append("Reading: \(display(mailFolder))")
         if let r = receiptFolder { append("Receipt PDFs: \(display(r))") }
+        if let t = o.saveTextDir { append("Saving matched emails in: \(display(t))") }
         append(o.since.map { "Since date: \($0)" } ?? "Since date: none (every order in the mail)")
 
         let options = o
@@ -234,4 +248,13 @@ final class MailAppModel: ObservableObject {
     }
 
     func clearReceiptFolder() { receiptFolder = nil }
+
+    func chooseMatchedEmailsFolder() {
+        if let url = pickFolder(message: "Choose where to save the matched emails. Each run makes a new matched-emails folder in it.",
+                                start: FileManager.default.fileExists(atPath: matchedEmailsBase.path) ? matchedEmailsBase : dataDir) {
+            matchedEmailsParent = url
+        }
+    }
+
+    func resetMatchedEmailsFolder() { matchedEmailsParent = nil }
 }

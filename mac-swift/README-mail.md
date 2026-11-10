@@ -55,7 +55,7 @@ Don't want to grant that? Export the emails instead: in Mail, select your LEGO e
 | **Exclude orders with 0 item(s)** | Off by default. When on, orders whose emails gave no items aren't written to the JSON, CSV or HTML (the log lists them). Same as `lego-mail --exclude-empty`. |
 | **Start fresh** | Normally, orders found by an earlier run are kept even if their emails have since been deleted. This forgets them. |
 | **Receipt PDFs (optional)** | A folder of receipt PDFs saved from Mail (**File → Save Attachments…**), for receipts Mail hasn't downloaded. |
-| **Save matched emails for troubleshooting** | Saves every LEGO order email as a text file, with what the app read from it. See below. |
+| **Save matched emails for troubleshooting** | Saves every LEGO order email as a text file, with what the app read from it. Each run makes a new folder, `matched-emails-1`, `matched-emails-2`, …, in the **Save files to** folder, or in another folder you choose with **Browse…** under the checkbox. See below. |
 
 Each run reads all the mail again, so there's nothing to resume. A mailbox with tens of thousands of emails takes a few seconds to a minute, because the app looks at each email's sender and subject first and reads only the LEGO ones in full.
 
