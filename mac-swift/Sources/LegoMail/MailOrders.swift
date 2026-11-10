@@ -47,7 +47,38 @@ public func buildOrders(from emails: [LegoEmail], timeZone: TimeZone = .current)
 
 private func sameItem(_ a: LegoOrderLine, _ b: LegoOrderLine) -> Bool {
     if let x = a.itemNumber, let y = b.itemNumber { return x == y }
-    return a.name.lowercased() == b.name.lowercased()
+    // A PDF receipt may cut a long name short ("Millennium Falcon...").
+    let x = a.name.lowercased().replacingOccurrences(of: "...", with: ""), y = b.name.lowercased().replacingOccurrences(of: "...", with: "")
+    return x == y || (min(x.count, y.count) >= 12 && (x.hasPrefix(y) || y.hasPrefix(x)))
+}
+
+/// A LEGO Shop receipt (PDF). A split order gets one per shipment, each with its own total.
+private func isReceipt(_ e: LegoEmail) -> Bool { e.kind == .confirmation && e.receiptNumber != nil }
+
+/// The order's receipts, each receipt number once (the same receipt can come from Mail and from
+/// the receipt folder), keeping the copy with the most detail.
+private func distinctReceipts(_ emails: [LegoEmail]) -> [LegoEmail] {
+    var best: [String: LegoEmail] = [:]
+    var order: [String] = []
+    for e in emails where isReceipt(e) && !e.summary.isEmpty {
+        let r = e.receiptNumber!
+        if let b = best[r] {
+            if e.summary.keys.count > b.summary.keys.count { best[r] = e }
+        } else { best[r] = e; order.append(r) }
+    }
+    return order.map { best[$0]! }
+}
+
+/// Adds up several receipts' summaries, line by line ("subtotal", "tax", "total", ...).
+private func sumSummaries(_ summaries: [OrderedStrings]) -> OrderedStrings {
+    var result = OrderedStrings()
+    var keys: [String] = []
+    for s in summaries { for k in s.keys where !keys.contains(k) { keys.append(k) } }
+    for k in keys {
+        let values = summaries.compactMap { $0[k] }.compactMap(amountValue)
+        if !values.isEmpty { result[k] = String(format: "%.2f", values.reduce(0, +)) }
+    }
+    return result
 }
 
 func buildOrder(_ number: String, _ emails: [LegoEmail], timeZone: TimeZone) -> LegoOrder {
@@ -67,13 +98,17 @@ func buildOrder(_ number: String, _ emails: [LegoEmail], timeZone: TimeZone) -> 
         return sa < sb
     }
     var items = detail?.items ?? []
-    // Items only some later email mentions (e.g. a replacement part) are added at the end.
-    for e in byDate where e.kind != .confirmation {
+    // Items only some later email mentions (e.g. a replacement part, or another shipment's
+    // receipt) are added at the end.
+    for e in byDate where e.kind != .confirmation || isReceipt(e) {
         for it in e.items where !items.contains(where: { sameItem($0, it) }) { items.append(it) }
     }
 
-    // Money summary: the confirmation's, else whichever email has the most of it.
-    let summary = byDate.first { $0.kind == .confirmation && !$0.summary.isEmpty }?.summary
+    // Money summary: the order confirmation's; else, for an order shipped in parts, all its
+    // receipts added up (each covers one shipment); else whichever email has the most of it.
+    let receipts = distinctReceipts(byDate)
+    let summary = byDate.first { $0.kind == .confirmation && !isReceipt($0) && $0.summary["total"] != nil }?.summary
+        ?? (receipts.count > 1 ? sumSummaries(receipts.map(\.summary)) : receipts.first?.summary)
         ?? byDate.max { $0.summary.keys.count < $1.summary.keys.count }?.summary
         ?? OrderedStrings()
 
@@ -106,7 +141,9 @@ func buildOrder(_ number: String, _ emails: [LegoEmail], timeZone: TimeZone) -> 
         ?? (byDate.first { $0.kind == .confirmation }?.sentDate ?? byDate.first?.sentDate).map { formatOrderDate($0, timeZone: timeZone) }
 
     let itemCount: Int? = items.isEmpty ? nil : items.reduce(0) { $0 + ($1.quantity ?? 1) }
-    return LegoOrder(orderNumber: number, status: orderStatus, orderDate: orderDate, total: summary["total"],
+    // A cancelled order cost nothing: $0.00, as on LEGO.com. The summary keeps what it would have cost.
+    let total = orderStatus == LegoEmailKind.cancelled.status ? "0.00" : summary["total"]
+    return LegoOrder(orderNumber: number, status: orderStatus, orderDate: orderDate, total: total,
                      itemCountListed: itemCount,
                      // A receipt saved under its receipt number has no order page: link to My Orders.
                      url: isLegoOrderNumber(number) ? orderDetailURL(number) : ordersURL,

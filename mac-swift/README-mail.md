@@ -73,6 +73,8 @@ These names differ from the LEGO.com scraper's (`lego_orders.*`), so the two app
 How one order is built from its emails:
 
 - **Items, prices, subtotal, delivery, tax, discounts and total** come from the order confirmation.
+- **An order shipped in parts** gets one PDF receipt per shipment. Without an order confirmation, the order's total (and subtotal, tax, …) is all its receipts added up, and its items are every receipt's items. The same receipt read twice (from Mail and from the receipt folder) counts once.
+- **A cancelled order's total is $0.00**, as on LEGO.com. Its summary keeps what it would have cost.
 - **Status** comes from the latest email: Processing (confirmation only), Shipped, Delivered, Cancelled, Refunded, Returned or Backordered.
 - **Item status and tracking number:** a shipping email that lists items updates just those items, so split shipments come out right. One that lists no items updates them all. A cancellation that lists only some items cancels only those items, not the order.
 - **Order date:** printed in the email, or else the day the confirmation arrived.
