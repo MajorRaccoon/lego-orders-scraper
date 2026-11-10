@@ -104,15 +104,18 @@ final class MailRunTests: XCTestCase {
         try Data("\(msg.utf8.count)\n\(msg)<plist/>".utf8).write(to: messages.appendingPathComponent("51.partial.emlx"))
         let out = tmp.appendingPathComponent("out")
 
-        // Without the folder: only a placeholder under the receipt number.
+        // Without the folder: the receipt has only its receipt number, so it's left out.
         var o = MailRunOptions(mailFolder: mail, outputDir: out, makeHTML: false)
-        XCTAssertEqual(try runMailImport(o).map(\.orderNumber), ["5550001"])
+        var firstLog: [String] = []
+        XCTAssertEqual(try runMailImport(o) { firstLog.append($0) }.map(\.orderNumber), [])
+        XCTAssertTrue(firstLog.contains { $0.contains("Left out 1 order(s) without a LEGO.com order number (T...): 5550001.") },
+                      firstLog.joined(separator: "\n"))
 
         // With the folder of saved PDFs.
         o.receiptFolder = samples.appendingPathComponent("receipts")
         var log: [String] = []
         let orders = try runMailImport(o) { log.append($0) }
-        XCTAssertEqual(orders.map(\.orderNumber), ["T100000004"])  // merged, and the old placeholder dropped
+        XCTAssertEqual(orders.map(\.orderNumber), ["T100000004"])  // the receipt joined its T order
         XCTAssertEqual(orders[0].items.map(\.itemNumber), ["10281", "76914"])
         XCTAssertEqual(orders[0].orderDate, "October 15, 2026")
         XCTAssertEqual(orders[0].total, "108.34")
@@ -121,11 +124,14 @@ final class MailRunTests: XCTestCase {
 
     func testFullRun() throws {
         let o = MailRunOptions(mailFolder: samples, outputDir: tmp)
-        let orders = try runMailImport(o)
-        XCTAssertEqual(orders.map(\.orderNumber),
-                       ["5550002", "T100000003", "T100000004", "T100000002", "T100000001", "T099999999"])
+        var log: [String] = []
+        let orders = try runMailImport(o) { log.append($0) }
+        // Only T orders: the store receipt saved under its receipt number (5550002) is left out.
+        XCTAssertEqual(orders.map(\.orderNumber), ["T100000003", "T100000004", "T100000002", "T100000001", "T099999999"])
+        XCTAssertTrue(log.contains { $0.contains("Left out 1 order(s) without a LEGO.com order number (T...): 5550002.") },
+                      log.joined(separator: "\n"))
 
-        let t1 = orders[4]
+        let t1 = orders[3]
         XCTAssertEqual(t1.status, "Delivered")
         XCTAssertEqual(t1.orderDate, "September 7, 2026")
         XCTAssertEqual(t1.total, "808.72")
@@ -137,20 +143,20 @@ final class MailRunTests: XCTestCase {
         XCTAssertEqual(t1.items[1].salePrice, "49.99")
         XCTAssertTrue(t1.items[2].isFreeGift)
 
-        let t2 = orders[3]
+        let t2 = orders[2]
         XCTAssertEqual(t2.status, "Processing")  // only one of its two items was cancelled
         XCTAssertEqual(t2.orderDate, "October 2, 2026")
         XCTAssertEqual(t2.total, "62.12")
         XCTAssertEqual(t2.items.map(\.status), ["Processing", "Cancelled"])
         XCTAssertTrue(t2.items[1].isPiece)
 
-        let t3 = orders[1]  // only a forwarded shipping email
+        let t3 = orders[0]  // only a forwarded shipping email
         XCTAssertEqual(t3.status, "Shipped")
         XCTAssertEqual(t3.items.first?.trackingNumber, "9400111899223344556677")
         XCTAssertNotNil(t3.orderDate)
 
         // An online order whose details are only in its PDF receipt.
-        let t4 = orders[2]
+        let t4 = orders[1]
         XCTAssertEqual(t4.orderDate, "October 15, 2026")
         XCTAssertEqual(t4.status, "Processing")
         XCTAssertEqual(t4.total, "108.34")
@@ -160,15 +166,6 @@ final class MailRunTests: XCTestCase {
         XCTAssertEqual(t4.items[1].regularPrice, "25.99")  // not the $51.98 line total
         XCTAssertEqual(t4.url, orderDetailURL("T100000004"))
 
-        // A store receipt with no LEGO order number, read from Mail's Attachments folder:
-        // saved under its receipt number, dated from the receipt, linked to My Orders.
-        let store = orders[0]
-        XCTAssertEqual(store.orderDate, "November 1, 2026")
-        XCTAssertEqual(store.total, "479.24")
-        XCTAssertEqual(store.summary["tax"], "29.25")
-        XCTAssertEqual(store.items.map(\.name), ["LEGO Technic Lamborghini Sian"])
-        XCTAssertEqual(store.items.first?.regularPrice, "449.99")
-        XCTAssertEqual(store.url, ordersURL)
 
         // Same file formats as the LEGO.com scraper.
         let saved = try loadOrders(tmp.appendingPathComponent(mailJSONName))
@@ -193,8 +190,26 @@ final class MailRunTests: XCTestCase {
 
         o.fresh = true
         let fresh = try runMailImport(o)
-        XCTAssertEqual(fresh.map(\.orderNumber), ["5550002", "T100000003", "T100000004", "T100000002", "T100000001"])
+        XCTAssertEqual(fresh.map(\.orderNumber), ["T100000003", "T100000004", "T100000002", "T100000001"])
         XCTAssertFalse(FileManager.default.fileExists(atPath: tmp.appendingPathComponent(mailHTMLName).path))
+    }
+
+    /// Orders saved by an earlier version under a receipt number are dropped from the files.
+    func testEarlierNonTOrdersAreDropped() throws {
+        let jsonURL = tmp.appendingPathComponent(mailJSONName)
+        let store = LegoOrder(orderNumber: "LEGO0000000001", status: "In-store purchase", orderDate: "October 25, 2024",
+                              total: "85.79", itemCountListed: 1, url: ordersURL,
+                              items: [LegoOrderLine(name: "Desert Skiff", itemNumber: "75396", customID: nil, quantity: 1,
+                                                    prices: emptyPrices(), isFreeGift: false, isPiece: false, isGiftCard: false,
+                                                    status: nil, trackingNumber: nil)])
+        let online = LegoOrder(orderNumber: "T123456789", status: "Delivered", orderDate: "January 2, 2020", total: "9.99",
+                               itemCountListed: 1, url: orderDetailURL("T123456789"),
+                               items: store.items)
+        try writeOutputs([store, online], json: jsonURL, csv: tmp.appendingPathComponent(mailCSVName), quiet: true)
+        let orders = try runMailImport(MailRunOptions(mailFolder: samples, outputDir: tmp, makeHTML: false))
+        XCTAssertFalse(orders.contains { $0.orderNumber == "LEGO0000000001" })
+        XCTAssertTrue(orders.contains { $0.orderNumber == "T123456789" })  // earlier T orders are still kept
+        XCTAssertTrue(orders.allSatisfy(isTOrder))
     }
 
     func testNoTrackingAndMissingFolder() throws {
