@@ -77,8 +77,17 @@ jobs:
             exit 1
           fi
           OPENSSL=$(brew --prefix openssl@3 2>/dev/null)/bin/openssl; [[ -x "$OPENSSL" ]] || OPENSSL=openssl
+          EXPORT_HELP="In Keychain Access > My Certificates, click the 'Apple Development' certificate itself (the row with the certificate icon; its private key appears under it when expanded), choose File > Export Items as a .p12, then update the secret with: base64 -i cert.p12 | pbcopy"
           if "$OPENSSL" pkcs12 -in "$P12" -passin env:CERT_PASSWORD -noout -info > "$RUNNER_TEMP/p12info.txt" 2>&1; then
-            echo ".p12 contents: $(grep -c 'Certificate bag' "$RUNNER_TEMP/p12info.txt") certificate(s), $(grep -ci 'keybag' "$RUNNER_TEMP/p12info.txt") private key(s); $(grep -m1 -E '^MAC:' "$RUNNER_TEMP/p12info.txt" || true)"
+            p12_certs=$(grep -c 'Certificate bag' "$RUNNER_TEMP/p12info.txt" || true)
+            p12_keys=$(grep -ci 'keybag' "$RUNNER_TEMP/p12info.txt" || true)
+            echo ".p12 contents: $p12_certs certificate(s), $p12_keys private key(s); $(grep -m1 -E '^MAC:' "$RUNNER_TEMP/p12info.txt" || true)"
+            if [[ "$p12_certs" -eq 0 ]]; then
+              echo "::error::MACOS_CERT_P12_DEV holds only a private key, not the certificate. $EXPORT_HELP"; exit 1
+            fi
+            if [[ "$p12_keys" -eq 0 ]]; then
+              echo "::error::MACOS_CERT_P12_DEV holds the certificate but not its private key. $EXPORT_HELP"; exit 1
+            fi
           else
             echo "::error::openssl couldn't open the .p12 with MACOS_CERT_DEV_PASSWORD: $(grep -m1 -iE 'mac verif|error|invalid' "$RUNNER_TEMP/p12info.txt" | cut -c1-120)"
             exit 1
@@ -92,7 +101,7 @@ jobs:
           keys=$(security dump-keychain "$KEYCHAIN" 2>/dev/null | grep -c 'class: 0x00000010' || true)
           echo "Imported $certs certificate(s) and $keys private key(s)."
           if [[ "$keys" -eq 0 ]]; then
-            echo "::error::MACOS_CERT_P12_DEV has the certificate but not its private key, so nothing can be signed with it. In Keychain Access, open 'My Certificates', expand your 'Apple Development' certificate, select the certificate and the key under it together, choose File > Export Items as .p12, then update the secret with: base64 -i cert.p12 | pbcopy"
+            echo "::error::macOS imported $certs certificate(s) and $keys private key(s) from MACOS_CERT_P12_DEV, so there's nothing to sign with. $EXPORT_HELP"
             exit 1
           fi
           # Let codesign use the key without a password prompt.
