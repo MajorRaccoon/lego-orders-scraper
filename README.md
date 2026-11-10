@@ -278,6 +278,7 @@ Prices: each item has `regular_price` and `sale_price`. They're equal when the i
   ./sync_copies.sh
   ```
 - Bump `__version__` in a script whenever you change it.
+- **Signing the Mac apps:** the macOS workflow signs both apps with your certificate when the repository secrets `MACOS_CERT_P12_DEV` (certificate + private key exported from Keychain Access as a .p12, base64-encoded), `MACOS_CERT_DEV_PASSWORD` and `MACOS_CERT_DEV_SIGN_IDENTITY` (e.g. `Apple Development: Jane Doe (AB12CD34EF)`) are set; otherwise it signs ad-hoc. Locally: `SIGN_IDENTITY="Apple Development: …" ./build_mail_app.sh`. An Apple Development signature keeps macOS permissions such as Full Disk Access across updates, but only a notarized Developer ID signature removes the "can't be verified" warning.
 - **Making a release:** write the notes in `release-notes/vX.Y.Z.md`, merge to `main`, then run the **Release** workflow (Actions tab → Release → Run workflow) with the tag and a title. It builds and tests the macOS apps and both Windows apps from one commit, then publishes the release with all four zips and their SHA-256 checksums.
 - Run the test suite (needs `playwright`, `cryptography` and `flask` installed):
   ```bash

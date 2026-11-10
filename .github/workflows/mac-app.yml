@@ -6,6 +6,10 @@
 # It also builds the Apple Mail reader ("LEGO Mail Orders", same Swift package) and checks that
 # its command-line version reads the made-up mailbox in mac-swift/sample-mail. Its zip is
 # attached as "LEGO-Mail-Orders-macOS".
+# Signing: if the repository secrets MACOS_CERT_P12_DEV (the certificate + private key as a
+# base64 .p12), MACOS_CERT_DEV_PASSWORD (its password) and MACOS_CERT_DEV_SIGN_IDENTITY (its
+# name, e.g. "Apple Development: Jane Doe (AB12CD34EF)") are set, both apps are signed with
+# that certificate; otherwise they're ad-hoc signed as before.
 # Runs when the Mac app's files (or the Python scripts it must match) change, or on demand
 # (Actions tab -> "Run workflow").
 name: macOS app
@@ -27,6 +31,8 @@ jobs:
   build:
     runs-on: macos-latest
     timeout-minutes: 40
+    env:
+      HAS_SIGNING_CERT: ${{ secrets.MACOS_CERT_P12_DEV != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +53,31 @@ jobs:
       - name: Run the Python test suite on macOS (includes the Swift parity check)
         run: python lego-tests/run_tests.py
 
+      - name: Import the signing certificate (if set)
+        if: env.HAS_SIGNING_CERT == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12_DEV }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_DEV_PASSWORD }}
+          IDENTITY: ${{ secrets.MACOS_CERT_DEV_SIGN_IDENTITY }}
+        run: |
+          [[ -n "$IDENTITY" ]] || { echo "MACOS_CERT_DEV_SIGN_IDENTITY isn't set"; exit 1; }
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          printf '%s' "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # Let codesign use the key without a password prompt.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$KEYCHAIN" | grep -qF "\"$IDENTITY\"" \
+            || { echo "the certificate in MACOS_CERT_P12_DEV doesn't match MACOS_CERT_DEV_SIGN_IDENTITY (or has no private key)"; exit 1; }
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "Signing certificate imported."
+
       - name: Build the app (runs the Swift tests, builds, signs, zips)
         working-directory: mac-swift
         run: ./build_app.sh
@@ -63,6 +94,12 @@ jobs:
           echo "version: $got (source says $want)"
           [[ -n "$want" && "$got" == "$want" ]] || { echo "version mismatch"; exit 1; }
           codesign --verify --deep --strict --verbose=2 "$APP"
+          if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+            codesign -dvv "$APP" 2>&1 | grep -qF "Authority=$SIGN_IDENTITY" || { echo "not signed with the certificate"; exit 1; }
+            echo "signed with the certificate from MACOS_CERT_DEV_SIGN_IDENTITY"
+          else
+            echo "ad-hoc signed (no signing certificate set)"
+          fi
           test -s "$APP/Contents/Resources/AppIcon.icns"
 
       - name: Check - the app starts and reads a page in its built-in browser
@@ -104,6 +141,12 @@ jobs:
           echo "version: $got (source says $want)"
           [[ -n "$want" && "$got" == "$want" ]] || { echo "version mismatch"; exit 1; }
           codesign --verify --deep --strict --verbose=2 "$APP"
+          if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+            codesign -dvv "$APP" 2>&1 | grep -qF "Authority=$SIGN_IDENTITY" || { echo "not signed with the certificate"; exit 1; }
+            echo "signed with the certificate from MACOS_CERT_DEV_SIGN_IDENTITY"
+          else
+            echo "ad-hoc signed (no signing certificate set)"
+          fi
 
       - name: Check - lego-mail reads the sample mailbox
         working-directory: mac-swift
@@ -146,3 +189,7 @@ jobs:
           name: LEGO-Mail-Orders-macOS
           path: mac-swift/dist/LEGO-Mail-Orders-mac.zip
           retention-days: 30
+
+      - name: Remove the signing keychain
+        if: always() && env.HAS_SIGNING_CERT == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
