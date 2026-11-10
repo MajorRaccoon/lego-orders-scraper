@@ -65,9 +65,18 @@ cat > "$OUT/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-echo "==> Ad-hoc signing (needed for Apple Silicon to run it)"
-codesign --force --deep --sign - "$OUT"
-codesign --verify --deep "$OUT"
+# SIGN_IDENTITY: a code-signing certificate in your keychain, e.g.
+#   SIGN_IDENTITY="Apple Development: Jane Doe (AB12CD34EF)" ./build_app.sh
+# (see: security find-identity -v -p codesigning). Unset: ad-hoc signing, which Apple
+# Silicon needs to run the app at all.
+IDENTITY="${SIGN_IDENTITY:--}"
+if [[ "$IDENTITY" == "-" ]]; then
+  echo "==> Ad-hoc signing (set SIGN_IDENTITY to sign with your certificate)"
+else
+  echo "==> Signing with the certificate in SIGN_IDENTITY"
+fi
+codesign --force --deep --sign "$IDENTITY" "$OUT"
+codesign --verify --deep --strict "$OUT"
 
 echo "==> Zipping"
 rm -f "dist/LEGO-Order-Scraper-native-mac.zip"

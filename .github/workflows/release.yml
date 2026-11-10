@@ -31,6 +31,7 @@ permissions:
 jobs:
   mac:
     uses: ./.github/workflows/mac-app.yml
+    secrets: inherit  # the signing certificate (MACOS_CERT_*_DEV), if set
 
   windows:
     uses: ./.github/workflows/windows-app.yml

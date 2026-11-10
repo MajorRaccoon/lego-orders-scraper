@@ -25,6 +25,8 @@ cd mac-swift
 
 This runs the tests, then builds `mac-swift/dist/LEGO Mail Orders.app` (Apple Silicon and Intel) and a zip of it. Drag **the `.app`** to Applications.
 
+To sign it with your own certificate instead of ad-hoc (so Full Disk Access stays on after you rebuild), pass its name: `SIGN_IDENTITY="Apple Development: Jane Doe (AB12CD34EF)" ./build_mail_app.sh`. Run `security find-identity -v -p codesigning` to see the names.
+
 ## Give it Full Disk Access (once)
 
 macOS protects Mail's folder (`~/Library/Mail`). Apps can read it only with **Full Disk Access**:
