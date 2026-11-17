@@ -30,7 +30,7 @@ rows = re.findall(r"<tr(?: class=\"totals\")?><td>(.*?)</td>(.*?)</tr>", sec)
 names = [r[0] for r in rows]
 assert names == ["January","February","March","April","May","June","July","August",
                  "September","October","November","December","Total"], names
-cells = {n: re.findall(r"<td[^>]*>(.*?)</td>", rest) for n, rest in rows}
+cells = {n: [re.sub(r"<[^>]+>", "", c) for c in re.findall(r"<td[^>]*>(.*?)</td>", rest)] for n, rest in rows}
 assert cells["February"] == ["$150.50", "—", "—"], cells["February"]
 assert cells["December"] == ["$1,200.00", "—", "—"], cells["December"]
 assert cells["January"] == ["—", "—", "$10.00"]
@@ -39,6 +39,17 @@ assert cells["Total"] == ["$1,350.50", "—", "$117.23"] or cells["Total"] == ["
 assert 'class="totals"' in sec and sec.index("December") < sec.index('class="totals"')
 assert "2 order(s) with no readable date or total" in sec
 print("Grid values, ordering, summing, gap year, TOTALS after December, skipped-order note: OK")
+
+# Each amount links to the first order placed that month (by date, whatever the list order),
+# and that order's section exists. Empty months and the Total row have no link.
+link = '<td><a href="#order-T1" title="First order in February 2024">$150.50</a></td>'
+assert link in sec, sec
+assert link in render_orders_html(list(reversed(orders)))
+assert '<td><a href="#order-T5" title="First order in October 2026">$107.23</a></td>' in sec
+assert 'id="order-T1"' in html
+assert "<a" not in sec[sec.index('class="totals"'):sec.index("</table>")]
+assert '<td class="zero">—</td>' in sec
+print("Amounts link to the first order of their month: OK")
 
 # Placement: after the stat cards, before the order index table.
 assert html.index('class="stats"') < html.index("Spending by month") < html.index('class="index-table"')

@@ -132,8 +132,12 @@ final class OutputTests: XCTestCase {
         let html = renderOrdersHTML(orders)
         let sec = String(html[html.range(of: "class=\"section-title\"")!.lowerBound..<html.range(of: "class=\"index-table\"")!.lowerBound])
         XCTAssertTrue(sec.contains("<th>Month</th><th>2024</th><th>2025</th><th>2026</th>"))
-        XCTAssertTrue(sec.contains("<tr><td>February</td><td>$150.50</td><td class=\"zero\">—</td><td class=\"zero\">—</td></tr>"))
-        XCTAssertTrue(sec.contains("<tr><td>December</td><td>$1,200.00</td>"))
+        // Each amount links to the first order placed that month, whatever the list order.
+        let febLink = "<td><a href=\"#order-T1\" title=\"First order in February 2024\">$150.50</a></td>"
+        XCTAssertTrue(sec.contains("<tr><td>February</td>\(febLink)<td class=\"zero\">—</td><td class=\"zero\">—</td></tr>"))
+        XCTAssertTrue(renderOrdersHTML(Array(orders.reversed())).contains(febLink))
+        XCTAssertTrue(sec.contains("<tr><td>December</td><td><a href=\"#order-T3\" title=\"First order in December 2024\">$1,200.00</a></td>"))
+        XCTAssertTrue(html.contains("id=\"order-T1\""))
         XCTAssertTrue(sec.contains("<tr class=\"totals\"><td>Total</td><td>$1,350.50</td><td>$0.00</td><td>$117.23</td></tr>"))
         XCTAssertTrue(sec.contains("2 order(s) with no readable date or total"))
         XCTAssertFalse(renderOrdersHTML([]).contains("Spending by month"))
