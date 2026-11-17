@@ -153,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "45"  # bump by 1 with every change to this script
+__version__ = "46"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -1874,6 +1874,8 @@ _HTML_STYLE = """
   .monthly-table th { color: var(--muted); font-weight: 600; background: var(--bg); }
   .monthly-table th:first-child, .monthly-table td:first-child { text-align: left; }
   .monthly-table td.zero { color: var(--muted); }
+  .monthly-table td a { color: inherit; text-decoration: underline dotted; }
+  .monthly-table td a:hover { color: var(--accent); text-decoration: underline; }
   .monthly-table tr.totals td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none;
     background: var(--bg); }
   .monthly-note { color: var(--muted); font-size: 0.8em; margin: 0 0 32px; }
@@ -2017,13 +2019,14 @@ def _render_monthly_spending_table(orders):
     still shows up as a column of dashes rather than silently vanishing),
     one row per month January..December, and a final TOTALS row with each
     year's total. Each cell is the sum of the order totals for orders placed
-    in that month of that year.
+    in that month of that year, and links to the first order placed that month.
 
     An order whose date can't be parsed or that has no usable total can't be
     placed in the grid; if any were left out a note under the table says how
     many, so the grid never silently disagrees with the "Total spent" card.
     """
     amounts = {}  # (year, month) -> dollars
+    first = {}  # (year, month) -> (date, order number) of the first order placed that month
     skipped = 0
     for o in orders:
         d = _parse_order_date(o.order_date)
@@ -2035,6 +2038,8 @@ def _render_monthly_spending_table(orders):
             skipped += 1
             continue
         amounts[(d.year, d.month)] = amounts.get((d.year, d.month), 0.0) + amount
+        if (d.year, d.month) not in first or d < first[(d.year, d.month)][0]:
+            first[(d.year, d.month)] = (d, o.order_number)
 
     if not amounts:
         return ""
@@ -2047,7 +2052,11 @@ def _render_monthly_spending_table(orders):
         cells = []
         for y in years:
             if (y, m) in amounts:
-                cells.append(f"<td>{_fmt_money(f'{amounts[(y, m)]:.2f}')}</td>")
+                anchor = f"order-{first[(y, m)][1]}"
+                cells.append(
+                    f'<td><a href="#{_esc(anchor)}" title="First order in {name} {y}">'
+                    f"{_fmt_money(f'{amounts[(y, m)]:.2f}')}</a></td>"
+                )
             else:
                 cells.append('<td class="zero">—</td>')
         rows.append(f"<tr><td>{name}</td>{''.join(cells)}</tr>")

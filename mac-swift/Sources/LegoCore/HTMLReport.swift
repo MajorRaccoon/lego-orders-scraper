@@ -82,6 +82,8 @@ let htmlStyle = """
   .monthly-table th { color: var(--muted); font-weight: 600; background: var(--bg); }
   .monthly-table th:first-child, .monthly-table td:first-child { text-align: left; }
   .monthly-table td.zero { color: var(--muted); }
+  .monthly-table td a { color: inherit; text-decoration: underline dotted; }
+  .monthly-table td a:hover { color: var(--accent); text-decoration: underline; }
   .monthly-table tr.totals td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none;
     background: var(--bg); }
   .monthly-note { color: var(--muted); font-size: 0.8em; margin: 0 0 32px; }
@@ -190,10 +192,11 @@ func renderOrderSection(_ order: LegoOrder, anchor: String) -> String {
 }
 
 /// Years-by-months grid of money spent, with a Total row. Orders with no readable date or
-/// total are counted in a note under the table.
+/// total are counted in a note under the table. Each amount links to the first order placed that month.
 func renderMonthlySpendingTable(_ orders: [LegoOrder]) -> String {
     var amounts: [Int: [Int: Double]] = [:]  // year -> month -> dollars
     var firstSeen: [(Int, Int)] = []         // (year, month) in first-seen order, like a Python dict
+    var firstOrder: [Int: [Int: (date: SimpleDate, number: String)]] = [:]  // year -> month -> first order placed
     var skipped = 0
     for o in orders {
         let d = parseOrderDate(o.orderDate)
@@ -201,6 +204,8 @@ func renderMonthlySpendingTable(_ orders: [LegoOrder]) -> String {
         guard let d, let amount else { skipped += 1; continue }
         if amounts[d.year]?[d.month] == nil { firstSeen.append((d.year, d.month)) }
         amounts[d.year, default: [:]][d.month, default: 0.0] += amount
+        if let f = firstOrder[d.year]?[d.month], !(d < f.date) { continue }
+        firstOrder[d.year, default: [:]][d.month] = (d, o.orderNumber)
     }
     guard let minYear = amounts.keys.min(), let maxYear = amounts.keys.max() else { return "" }
     let years = Array(minYear...maxYear)
@@ -209,7 +214,10 @@ func renderMonthlySpendingTable(_ orders: [LegoOrder]) -> String {
     var rows: [String] = []
     for (idx, name) in monthNames.enumerated() {
         let cells = years.map { y -> String in
-            if let v = amounts[y]?[idx + 1] { return "<td>\(fmtMoney(pyFixed2(v)))</td>" }
+            if let v = amounts[y]?[idx + 1] {
+                let anchor = "order-\(firstOrder[y]![idx + 1]!.number)"
+                return "<td><a href=\"#\(esc(anchor))\" title=\"First order in \(name) \(y)\">\(fmtMoney(pyFixed2(v)))</a></td>"
+            }
             return "<td class=\"zero\">—</td>"
         }
         rows.append("<tr><td>\(name)</td>\(cells.joined())</tr>")
