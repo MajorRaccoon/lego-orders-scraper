@@ -115,6 +115,10 @@ final class OutputTests: XCTestCase {
         XCTAssertTrue(html.contains("No item detail fetched for this order yet.") && html.contains("no detail"))
         XCTAssertTrue(html.contains("<div class=\"n\">2</div>") && html.contains("<div class=\"n\">3</div>"))
         XCTAssertFalse(renderOrdersHTML([o2]).contains("<table class=\"summary-table\">"))
+        // Every order ends with a "Back to top" link to the report's title.
+        XCTAssertTrue(html.contains("<h1 id=\"top\">Test Order History</h1>"))
+        let back = "<p class=\"back-to-top\"><a href=\"#top\">&uarr; Back to top</a></p></section>"
+        XCTAssertEqual(html.components(separatedBy: back).count - 1, 2)
 
         let p = tmp.appendingPathComponent("report.html")
         try writeHTMLReport([o1, o2], to: p)

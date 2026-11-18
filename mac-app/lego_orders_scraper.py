@@ -153,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "46"  # bump by 1 with every change to this script
+__version__ = "47"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -1851,6 +1851,9 @@ _HTML_STYLE = """
   .order-link { font-size: 0.85em; margin: 2px 0 14px; }
   .order-link a { color: var(--accent); text-decoration: none; }
   .order-link a:hover { text-decoration: underline; }
+  .back-to-top { font-size: 0.85em; margin: 12px 0 0; text-align: right; }
+  .back-to-top a { color: var(--accent); text-decoration: none; }
+  .back-to-top a:hover { text-decoration: underline; }
   .summary-table { margin: 4px 0 16px; max-width: 320px; }
   .summary-table td { padding: 2px 10px 2px 0; font-size: 0.9em; }
   .summary-table td.num { padding-right: 0; }
@@ -2003,6 +2006,7 @@ def _render_order_section(order, anchor):
         f'<p class="order-link"><a href="{_esc(order.url)}" target="_blank" rel="noopener">View on LEGO.com &rarr;</a></p>'
         + _render_order_summary_table(order.summary)
         + items_html
+        + '<p class="back-to-top"><a href="#top">&uarr; Back to top</a></p>'
         + "</section>"
     )
 
@@ -2261,7 +2265,7 @@ def render_orders_html(orders, title="LEGO Order History"):
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"<title>{_esc(title)}</title>\n" + _HTML_STYLE + "</head>\n<body>\n"
         '<div class="wrap">\n'
-        f"<h1>{_esc(title)}</h1>\n"
+        f'<h1 id="top">{_esc(title)}</h1>\n'
         f'<p class="generated">Generated {_esc(generated_at)}</p>\n'
         f'<div class="stats">{stats_html}</div>\n'
         + _render_monthly_spending_table(orders)

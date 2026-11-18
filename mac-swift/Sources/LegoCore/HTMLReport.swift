@@ -59,6 +59,9 @@ let htmlStyle = """
   .order-link { font-size: 0.85em; margin: 2px 0 14px; }
   .order-link a { color: var(--accent); text-decoration: none; }
   .order-link a:hover { text-decoration: underline; }
+  .back-to-top { font-size: 0.85em; margin: 12px 0 0; text-align: right; }
+  .back-to-top a { color: var(--accent); text-decoration: none; }
+  .back-to-top a:hover { text-decoration: underline; }
   .summary-table { margin: 4px 0 16px; max-width: 320px; }
   .summary-table td { padding: 2px 10px 2px 0; font-size: 0.9em; }
   .summary-table td.num { padding-right: 0; }
@@ -188,6 +191,7 @@ func renderOrderSection(_ order: LegoOrder, anchor: String) -> String {
         + "<p class=\"order-link\"><a href=\"\(esc(order.url))\" target=\"_blank\" rel=\"noopener\">View on LEGO.com &rarr;</a></p>"
         + renderSummaryTable(order.summary)
         + itemsHTML
+        + "<p class=\"back-to-top\"><a href=\"#top\">&uarr; Back to top</a></p>"
         + "</section>"
 }
 
@@ -385,7 +389,7 @@ public func renderOrdersHTML(_ orders: [LegoOrder], title: String = "LEGO Order 
         + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
         + "<title>\(esc(title))</title>\n" + htmlStyle + "</head>\n<body>\n"
         + "<div class=\"wrap\">\n"
-        + "<h1>\(esc(title))</h1>\n"
+        + "<h1 id=\"top\">\(esc(title))</h1>\n"
         + "<p class=\"generated\">Generated \(esc(generatedTimestamp(now)))</p>\n"
         + "<div class=\"stats\">\(stats)</div>\n"
         + renderMonthlySpendingTable(orders)
