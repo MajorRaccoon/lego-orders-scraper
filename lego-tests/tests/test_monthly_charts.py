@@ -37,6 +37,19 @@ assert c2024.count('class="peak"') == 1 and ">$1,200.00</text>" in c2024      # 
 assert c2026.count('class="peak"') == 1 and ">$107.23</text>" in c2026
 print("Only the busiest month of each year gets a value label: OK")
 
+# Each month with orders links (label and bar) to its first order; other months have no link.
+assert re.findall(r'<a href="#order-(T\d+)">', c2024) == ["T1", "T3"], c2024
+assert re.findall(r'<a href="#order-(T\d+)">', c2026) == ["T4", "T5"]
+assert "<a " not in c2025
+feb = c2024[c2024.index('<a href="#order-T1">'):]
+feb = feb[:feb.index("</a>")]
+assert ">Feb</text>" in feb and 'class="bar"' in feb and "February 2024: $150.50" in feb
+mar = re.search(r'<text class="month"[^>]*>Mar</text>', c2024)
+assert mar and "<a " not in c2024[mar.start() - 30:mar.start()]
+assert c2024.count("<a ") == c2024.count("</a>") == 2
+assert "T1" in re.findall(r'<a href="#order-(T\d+)">', render_orders_html(list(reversed(orders))))
+print("Months with orders link to their first order; months without have no link: OK")
+
 ticks = [re.findall(r'class="tick"[^>]*>([^<]*)<', c) for c in charts]
 assert ticks[0] == ticks[1] == ticks[2] == ["$0", "$500", "$1,000", "$1,500"], ticks   # one shared scale
 print("All charts share one scale (same ticks), so years compare by bar height: OK")

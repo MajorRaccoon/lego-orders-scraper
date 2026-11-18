@@ -115,6 +115,10 @@ final class OutputTests: XCTestCase {
         XCTAssertTrue(html.contains("No item detail fetched for this order yet.") && html.contains("no detail"))
         XCTAssertTrue(html.contains("<div class=\"n\">2</div>") && html.contains("<div class=\"n\">3</div>"))
         XCTAssertFalse(renderOrdersHTML([o2]).contains("<table class=\"summary-table\">"))
+        // Every order ends with a "Back to top" link to the report's title.
+        XCTAssertTrue(html.contains("<h1 id=\"top\">Test Order History</h1>"))
+        let back = "<p class=\"back-to-top\"><a href=\"#top\">&uarr; Back to top</a></p></section>"
+        XCTAssertEqual(html.components(separatedBy: back).count - 1, 2)
 
         let p = tmp.appendingPathComponent("report.html")
         try writeHTMLReport([o1, o2], to: p)
@@ -156,6 +160,12 @@ final class OutputTests: XCTestCase {
         XCTAssertTrue(html.range(of: "class=\"year-charts\"")!.lowerBound < html.range(of: "class=\"index-table\"")!.lowerBound)
         XCTAssertTrue(html.contains("<title>December 2024: $1,200.00</title>"))
         XCTAssertTrue(html.contains("No spending this year"))
+        // Months with orders link (label and bar) to their first order; other months don't.
+        let c2024 = String(charts[charts.startIndex])
+        XCTAssertTrue(c2024.contains("<a href=\"#order-T1\"><text class=\"month\""))
+        XCTAssertTrue(c2024.contains("<a href=\"#order-T2\"><text class=\"month\""))
+        XCTAssertEqual(c2024.components(separatedBy: "<a ").count - 1, 2)
+        XCTAssertFalse(String(charts[charts.startIndex + 1]).contains("<a "))  // 2025: no orders
         XCTAssertEqual(niceScale(0).max, 1); XCTAssertEqual(niceScale(9).step, 5)
         XCTAssertEqual(niceScale(5049.54).max, 6000); XCTAssertEqual(niceScale(5049.54).step, 2000)
         XCTAssertEqual(pyCommaInt(1500), "1,500"); XCTAssertEqual(pyCommaInt(0), "0")

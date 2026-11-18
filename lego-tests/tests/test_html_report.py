@@ -156,4 +156,10 @@ leftover_tmp_files = list(tmp_dir.glob("*.tmp*"))
 assert not leftover_tmp_files, f"atomic write left temp file(s) behind: {leftover_tmp_files}"
 print("write_html_report() writes a complete, well-formed file to disk with no leftover temp file: OK")
 
+# --- Every order ends with a "Back to top" link to the report's title. ------
+back = '<p class="back-to-top"><a href="#top">&uarr; Back to top</a></p></section>'
+assert written.count(back) == len(orders), written.count(back)
+assert '<h1 id="top">' in written
+print('Each order has a "Back to top" link to the title: OK')
+
 print("\nALL HTML REPORT TESTS PASSED")

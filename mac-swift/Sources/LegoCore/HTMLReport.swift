@@ -59,6 +59,9 @@ let htmlStyle = """
   .order-link { font-size: 0.85em; margin: 2px 0 14px; }
   .order-link a { color: var(--accent); text-decoration: none; }
   .order-link a:hover { text-decoration: underline; }
+  .back-to-top { font-size: 0.85em; margin: 12px 0 0; text-align: right; }
+  .back-to-top a { color: var(--accent); text-decoration: none; }
+  .back-to-top a:hover { text-decoration: underline; }
   .summary-table { margin: 4px 0 16px; max-width: 320px; }
   .summary-table td { padding: 2px 10px 2px 0; font-size: 0.9em; }
   .summary-table td.num { padding-right: 0; }
@@ -99,6 +102,7 @@ let htmlStyle = """
   .year-chart .empty { fill: var(--muted); font-size: 13px; font-style: italic; }
   .year-chart .bar { fill: var(--bar); }
   .year-chart .bar:hover { opacity: 0.75; }
+  .year-chart a .month { fill: var(--accent); text-decoration: underline; }
 </style>
 
 """
@@ -188,6 +192,7 @@ func renderOrderSection(_ order: LegoOrder, anchor: String) -> String {
         + "<p class=\"order-link\"><a href=\"\(esc(order.url))\" target=\"_blank\" rel=\"noopener\">View on LEGO.com &rarr;</a></p>"
         + renderSummaryTable(order.summary)
         + itemsHTML
+        + "<p class=\"back-to-top\"><a href=\"#top\">&uarr; Back to top</a></p>"
         + "</section>"
 }
 
@@ -237,7 +242,8 @@ func renderMonthlySpendingTable(_ orders: [LegoOrder]) -> String {
         + "<div class=\"monthly-wrap\"><table class=\"monthly-table\">"
         + "<thead><tr>\(head)</tr></thead><tbody>\(rows.joined())</tbody></table></div>\n"
         + note
-        + renderMonthlyCharts(amounts, firstSeen: firstSeen, years: years)
+        + renderMonthlyCharts(amounts, firstSeen: firstSeen, years: years,
+                              firstOrders: firstOrder.mapValues { $0.mapValues(\.number) })
 }
 
 // MARK: - Per-year bar charts (port of the Python _render_monthly_charts)
@@ -271,7 +277,10 @@ func pyCommaInt(_ n: Int) -> String {
     return (n < 0 ? "-" : "") + out
 }
 
-func renderYearChart(year: Int, months: [Int: Double], total: String, niceMax: Int, step: Int) -> String {
+/// `firstOrders`: month -> number of the first order placed then. That month's label and bar link to it;
+/// months with no orders have no link.
+func renderYearChart(year: Int, months: [Int: Double], total: String, niceMax: Int, step: Int,
+                     firstOrders: [Int: String] = [:]) -> String {
     let plotW = chW - chLeft - chRight
     let plotH = chH - chTop - chBottom
     let base = chTop + plotH
@@ -294,24 +303,13 @@ func renderYearChart(year: Int, months: [Int: Double], total: String, niceMax: I
 
     for m in 1...12 {
         let cx = chLeft + Double(m - 1) * slot + slot / 2
+        let link = firstOrders[m]
+        if let link { parts.append("<a href=\"#\(esc("order-" + link))\">") }
         parts.append("<text class=\"month\" x=\"\(f1(cx))\" y=\"\(f1(chH - 8))\" "
             + "text-anchor=\"middle\">\(monthAbbr[m - 1])</text>")
-        guard let v = months[m] else { continue }
-        var h = max(v, 0.0) / Double(niceMax) * plotH
-        if v > 0 && h < 1 { h = 1.0 }
-        if h <= 0 { continue }
-        let x = cx - chBar / 2
-        let y = base - h
-        let r = min(4.0, h / 2, chBar / 2)
-        let label = "\(monthNames[m - 1]) \(year): \(fmtMoney(pyFixed2(v)))"
-        parts.append("<path class=\"bar\" d=\"M\(f1(x)),\(f1(base)) V\(f1(y + r)) "
-            + "Q\(f1(x)),\(f1(y)) \(f1(x + r)),\(f1(y)) H\(f1(x + chBar - r)) "
-            + "Q\(f1(x + chBar)),\(f1(y)) \(f1(x + chBar)),\(f1(y + r)) V\(f1(base)) Z\">"
-            + "<title>\(esc(label))</title></path>")
-        if m == peakMonth {
-            parts.append("<text class=\"peak\" x=\"\(f1(cx))\" y=\"\(f1(y - 6))\" "
-                + "text-anchor=\"middle\">\(fmtMoney(pyFixed2(v)))</text>")
-        }
+        parts.append(contentsOf: monthBar(year: year, m: m, v: months[m], cx: cx, base: base, plotH: plotH,
+                                          niceMax: niceMax, peakMonth: peakMonth))
+        if link != nil { parts.append("</a>") }
     }
 
     if !months.values.contains(where: { $0 > 0 }) {
@@ -327,8 +325,32 @@ func renderYearChart(year: Int, months: [Int: Double], total: String, niceMax: I
         + "</figure>"
 }
 
+/// One month's bar (with its hover tooltip) and, for the busiest month, its value label.
+private func monthBar(year: Int, m: Int, v: Double?, cx: Double, base: Double, plotH: Double,
+                      niceMax: Int, peakMonth: Int?) -> [String] {
+    var parts: [String] = []
+    guard let v else { return parts }
+    var h = max(v, 0.0) / Double(niceMax) * plotH
+    if v > 0 && h < 1 { h = 1.0 }
+    if h <= 0 { return parts }
+    let x = cx - chBar / 2
+    let y = base - h
+    let r = min(4.0, h / 2, chBar / 2)
+    let label = "\(monthNames[m - 1]) \(year): \(fmtMoney(pyFixed2(v)))"
+    parts.append("<path class=\"bar\" d=\"M\(f1(x)),\(f1(base)) V\(f1(y + r)) "
+        + "Q\(f1(x)),\(f1(y)) \(f1(x + r)),\(f1(y)) H\(f1(x + chBar - r)) "
+        + "Q\(f1(x + chBar)),\(f1(y)) \(f1(x + chBar)),\(f1(y + r)) V\(f1(base)) Z\">"
+        + "<title>\(esc(label))</title></path>")
+    if m == peakMonth {
+        parts.append("<text class=\"peak\" x=\"\(f1(cx))\" y=\"\(f1(y - 6))\" "
+            + "text-anchor=\"middle\">\(fmtMoney(pyFixed2(v)))</text>")
+    }
+    return parts
+}
+
 /// One bar chart per year, all on the same scale, placed after the "Spending by month" table.
-func renderMonthlyCharts(_ amounts: [Int: [Int: Double]], firstSeen: [(Int, Int)], years: [Int]) -> String {
+func renderMonthlyCharts(_ amounts: [Int: [Int: Double]], firstSeen: [(Int, Int)], years: [Int],
+                         firstOrders: [Int: [Int: String]] = [:]) -> String {
     guard !firstSeen.isEmpty else { return "" }
     // max() over the values in first-seen order, like Python's max(amounts.values())
     let maxValue = firstSeen.map { amounts[$0.0]![$0.1]! }.max()!
@@ -336,7 +358,8 @@ func renderMonthlyCharts(_ amounts: [Int: [Int: Double]], firstSeen: [(Int, Int)
     let charts = years.map { y -> String in
         let months = amounts[y] ?? [:]
         let total = pyFixed2(firstSeen.filter { $0.0 == y }.map { amounts[y]![$0.1]! }.reduce(0.0, +))
-        return renderYearChart(year: y, months: months, total: total, niceMax: niceMax, step: step)
+        return renderYearChart(year: y, months: months, total: total, niceMax: niceMax, step: step,
+                               firstOrders: firstOrders[y] ?? [:])
     }
     return "<h2 class=\"section-title\">Spending by month, by year</h2>\n"
         + "<div class=\"year-charts\">\(charts.joined())</div>\n"
@@ -385,7 +408,7 @@ public func renderOrdersHTML(_ orders: [LegoOrder], title: String = "LEGO Order 
         + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
         + "<title>\(esc(title))</title>\n" + htmlStyle + "</head>\n<body>\n"
         + "<div class=\"wrap\">\n"
-        + "<h1>\(esc(title))</h1>\n"
+        + "<h1 id=\"top\">\(esc(title))</h1>\n"
         + "<p class=\"generated\">Generated \(esc(generatedTimestamp(now)))</p>\n"
         + "<div class=\"stats\">\(stats)</div>\n"
         + renderMonthlySpendingTable(orders)
