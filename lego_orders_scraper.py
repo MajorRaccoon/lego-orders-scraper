@@ -153,7 +153,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "47"  # bump by 1 with every change to this script
+__version__ = "48"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -1894,6 +1894,7 @@ _HTML_STYLE = """
   .year-chart .empty { fill: var(--muted); font-size: 13px; font-style: italic; }
   .year-chart .bar { fill: var(--bar); }
   .year-chart .bar:hover { opacity: 0.75; }
+  .year-chart a .month { fill: var(--accent); text-decoration: underline; }
 </style>
 """
 
@@ -2087,7 +2088,7 @@ def _render_monthly_spending_table(orders):
         '<div class="monthly-wrap"><table class="monthly-table">'
         f"<thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>\n"
         + note
-        + _render_monthly_charts(amounts, years)
+        + _render_monthly_charts(amounts, years, {k: n for k, (_, n) in first.items()})
     )
 
 
@@ -2120,10 +2121,13 @@ def _f1(x):
     return f"{x:.1f}"
 
 
-def _render_year_chart(year, months, total, nice_max, step):
+def _render_year_chart(year, months, total, nice_max, step, first_orders=None):
     """One year's bar chart as inline SVG: a bar per month (heights on the
     shared scale), recessive gridlines with dollar ticks, month labels, the
-    year's busiest month labeled, and a hover tooltip on every bar."""
+    year's busiest month labeled, and a hover tooltip on every bar.
+    `first_orders` maps a month to the number of the first order placed then:
+    that month's label and bar link to it. Months with no orders have no link."""
+    first_orders = first_orders or {}
     plot_w = _CH_W - _CH_LEFT - _CH_RIGHT
     plot_h = _CH_H - _CH_TOP - _CH_BOTTOM
     base = _CH_TOP + plot_h
@@ -2150,33 +2154,16 @@ def _render_year_chart(year, months, total, nice_max, step):
 
     for m in range(1, 13):
         cx = _CH_LEFT + (m - 1) * slot + slot / 2
+        link = first_orders.get(m)
+        if link is not None:
+            parts.append(f'<a href="#{_esc("order-" + str(link))}">')
         parts.append(
             f'<text class="month" x="{_f1(cx)}" y="{_f1(_CH_H - 8)}" '
             f'text-anchor="middle">{_MONTH_ABBR[m - 1]}</text>'
         )
-        v = months.get(m)
-        if v is None:
-            continue
-        h = max(v, 0.0) / nice_max * plot_h
-        if v > 0 and h < 1:
-            h = 1.0  # keep a tiny month visible
-        if h <= 0:
-            continue
-        x = cx - _CH_BAR / 2
-        y = base - h
-        r = min(4.0, h / 2, _CH_BAR / 2)
-        label = f"{_MONTH_NAMES[m - 1]} {year}: {_fmt_money(f'{v:.2f}')}"
-        parts.append(
-            f'<path class="bar" d="M{_f1(x)},{_f1(base)} V{_f1(y + r)} '
-            f'Q{_f1(x)},{_f1(y)} {_f1(x + r)},{_f1(y)} H{_f1(x + _CH_BAR - r)} '
-            f'Q{_f1(x + _CH_BAR)},{_f1(y)} {_f1(x + _CH_BAR)},{_f1(y + r)} V{_f1(base)} Z">'
-            f"<title>{_esc(label)}</title></path>"
-        )
-        if m == peak_month:
-            parts.append(
-                f'<text class="peak" x="{_f1(cx)}" y="{_f1(y - 6)}" '
-                f'text-anchor="middle">{_fmt_money(f"{v:.2f}")}</text>'
-            )
+        parts.extend(_render_month_bar(year, m, months.get(m), cx, base, plot_h, nice_max, peak_month))
+        if link is not None:
+            parts.append("</a>")
 
     if not any(v > 0 for v in months.values()):
         parts.append(
@@ -2194,11 +2181,42 @@ def _render_year_chart(year, months, total, nice_max, step):
     )
 
 
-def _render_monthly_charts(amounts, years):
+def _render_month_bar(year, m, v, cx, base, plot_h, nice_max, peak_month):
+    """One month's bar (with its hover tooltip) and, for the busiest month,
+    its value label. Nothing for a month with no spending."""
+    parts = []
+    if v is None:
+        return parts
+    h = max(v, 0.0) / nice_max * plot_h
+    if v > 0 and h < 1:
+        h = 1.0  # keep a tiny month visible
+    if h <= 0:
+        return parts
+    x = cx - _CH_BAR / 2
+    y = base - h
+    r = min(4.0, h / 2, _CH_BAR / 2)
+    label = f"{_MONTH_NAMES[m - 1]} {year}: {_fmt_money(f'{v:.2f}')}"
+    parts.append(
+        f'<path class="bar" d="M{_f1(x)},{_f1(base)} V{_f1(y + r)} '
+        f'Q{_f1(x)},{_f1(y)} {_f1(x + r)},{_f1(y)} H{_f1(x + _CH_BAR - r)} '
+        f'Q{_f1(x + _CH_BAR)},{_f1(y)} {_f1(x + _CH_BAR)},{_f1(y + r)} V{_f1(base)} Z">'
+        f"<title>{_esc(label)}</title></path>"
+    )
+    if m == peak_month:
+        parts.append(
+            f'<text class="peak" x="{_f1(cx)}" y="{_f1(y - 6)}" '
+            f'text-anchor="middle">{_fmt_money(f"{v:.2f}")}</text>'
+        )
+    return parts
+
+
+def _render_monthly_charts(amounts, years, first_orders=None):
     """One bar chart per year (same scale for all, so years can be compared by
     bar height), placed after the "Spending by month" table. `amounts` is the
     table's {(year, month): dollars} dict; years with no orders get an empty
-    chart, just as they get a column of dashes in the table."""
+    chart, just as they get a column of dashes in the table. `first_orders` is
+    {(year, month): order number} of each month's first order, for the links."""
+    first_orders = first_orders or {}
     if not amounts:
         return ""
     nice_max, step = _nice_scale(max(amounts.values()))
@@ -2206,7 +2224,8 @@ def _render_monthly_charts(amounts, years):
     for y in years:
         months = {m: v for (yy, m), v in amounts.items() if yy == y}
         total = f"{sum(v for (yy, _), v in amounts.items() if yy == y):.2f}"
-        charts.append(_render_year_chart(y, months, total, nice_max, step))
+        links = {m: n for (yy, m), n in first_orders.items() if yy == y}
+        charts.append(_render_year_chart(y, months, total, nice_max, step, links))
     return (
         '<h2 class="section-title">Spending by month, by year</h2>\n'
         f'<div class="year-charts">{"".join(charts)}</div>\n'
