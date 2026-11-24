@@ -47,10 +47,18 @@ public func buildOrders(from emails: [LegoEmail], timeZone: TimeZone = .current)
 
 private func sameItem(_ a: LegoOrderLine, _ b: LegoOrderLine) -> Bool {
     if let x = a.itemNumber, let y = b.itemNumber { return x == y }
-    // A PDF receipt may cut a long name short ("Millennium Falcon...").
-    let x = a.name.lowercased().replacingOccurrences(of: "...", with: ""), y = b.name.lowercased().replacingOccurrences(of: "...", with: "")
+    // Emails and PDF receipts cut long names short: "Throne Room Due..", "Millennium Falcon...",
+    // "Harry Potter Pen Pal B GLOBAL 1" (the receipt's description column).
+    let x = matchName(a.name), y = matchName(b.name)
     return x == y || (min(x.count, y.count) >= 12 && (x.hasPrefix(y) || y.hasPrefix(x)))
 }
+
+private func matchName(_ name: String) -> String {
+    let lower = name.lowercased().replacingOccurrences(of: "...", with: "").replacingOccurrences(of: "..", with: "")
+    return MRx.replace("\\s+global(\\s+\\d+)?$", in: lower, with: "").trimmed
+}
+
+private func hasPrice(_ item: LegoOrderLine) -> Bool { item.regularPrice != nil || item.salePrice != nil }
 
 /// A LEGO Shop receipt (PDF). A split order gets one per shipment, each with its own total.
 private func isReceipt(_ e: LegoEmail) -> Bool { e.kind == .confirmation && e.receiptNumber != nil }
@@ -111,6 +119,39 @@ func buildOrder(_ number: String, _ emails: [LegoEmail], timeZone: TimeZone) -> 
         ?? (receipts.count > 1 ? sumSummaries(receipts.map(\.summary)) : receipts.first?.summary)
         ?? byDate.max { $0.summary.keys.count < $1.summary.keys.count }?.summary
         ?? OrderedStrings()
+
+    // The email with the most items may list them without prices (a shipping notice, while
+    // the receipt lists only what was paid for): take each item's price and quantity from
+    // another email for the order that has them.
+    let allItems = byDate.flatMap(\.items)
+    for i in items.indices where items[i].itemNumber == nil {
+        // Current order confirmations show no item numbers; the receipt has them.
+        guard let numbered = allItems.first(where: { $0.itemNumber != nil && sameItem($0, items[i]) }) else { continue }
+        items[i].itemNumber = numbered.itemNumber
+        // The receipt also shows the regular price of an item that was on sale (same price paid).
+        if numbered.salePrice != nil, numbered.salePrice == items[i].salePrice,
+           numbered.regularPrice != items[i].regularPrice {
+            items[i].prices = numbered.prices
+        }
+    }
+    for i in items.indices {
+        if !hasPrice(items[i]) && !items[i].isFreeGift,
+           let priced = allItems.first(where: { sameItem($0, items[i]) && (hasPrice($0) || $0.isFreeGift) }) {
+            items[i].prices = priced.prices
+            items[i].isFreeGift = priced.isFreeGift
+            if items[i].quantity == nil { items[i].quantity = priced.quantity }
+        }
+        if items[i].quantity == nil,
+           let q = allItems.first(where: { sameItem($0, items[i]) && $0.quantity != nil })?.quantity {
+            items[i].quantity = q
+        }
+    }
+    // When the priced items add up to the subtotal, the items with no price cost nothing:
+    // they're free gifts (gifts with purchase are on the shipping notice, not the receipt).
+    if let subtotal = summary["subtotal"].flatMap(amountValue), items.contains(where: hasPrice),
+       abs(items.compactMap { ($0.salePrice ?? $0.regularPrice).flatMap(amountValue) }.reduce(0, +) - subtotal) < 0.005 {
+        for i in items.indices where !hasPrice(items[i]) && !items[i].isGiftCard { items[i].isFreeGift = true }
+    }
 
     // Status, oldest to newest, for the order and each item.
     var orderStatus: String? = byDate.contains { $0.kind == .confirmation } ? LegoEmailKind.confirmation.status : nil
