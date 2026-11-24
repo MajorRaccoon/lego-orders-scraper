@@ -125,8 +125,16 @@ func buildOrder(_ number: String, _ emails: [LegoEmail], timeZone: TimeZone) -> 
     // another email for the order that has them.
     let allItems = byDate.flatMap(\.items)
     for i in items.indices where items[i].itemNumber == nil {
-        // Current order confirmations show no item numbers; the receipt has them.
-        guard let numbered = allItems.first(where: { $0.itemNumber != nil && sameItem($0, items[i]) }) else { continue }
+        // Current order confirmations show no item numbers; the receipt has them. Each number
+        // goes to one item only: four different "Advent Calendar 2026" items get four numbers,
+        // each preferably from the receipt line with the same price.
+        let taken = Set(items.compactMap(\.itemNumber))
+        let candidates = allItems.filter { other in
+            guard let n = other.itemNumber, !taken.contains(n) else { return false }
+            return sameItem(other, items[i])
+        }
+        guard let numbered = candidates.first(where: { $0.salePrice != nil && $0.salePrice == items[i].salePrice })
+            ?? candidates.first else { continue }
         items[i].itemNumber = numbered.itemNumber
         // The receipt also shows the regular price of an item that was on sale (same price paid).
         if numbered.salePrice != nil, numbered.salePrice == items[i].salePrice,
