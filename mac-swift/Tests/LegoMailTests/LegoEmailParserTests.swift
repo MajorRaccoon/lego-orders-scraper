@@ -629,6 +629,34 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(other.items[0].salePrice, "799.99")
     }
 
+    func testItemNumbersComeFromTheReceipt() {
+        func line(_ name: String, _ number: String?, _ regular: String?, _ sale: String?, free: Bool = false) -> LegoOrderLine {
+            LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: 1,
+                          prices: OrderedStrings([("product.regularPrice", regular), ("product.salePrice", sale)]),
+                          isFreeGift: free, isPiece: false, isGiftCard: false, status: nil, trackingNumber: nil)
+        }
+        let day: (Int) -> Date = { Date(timeIntervalSince1970: 1_788_000_000 + Double($0) * 86_400) }
+        // The confirmation: no item numbers, only the price paid. The receipt: numbers, regular
+        // and sale prices, and a name cut short with "GLOBAL 1" after it.
+        let confirm = LegoEmail(orderNumber: "T100000082", kind: .confirmation, subject: "Your order is confirmed", sentDate: day(0),
+                                orderDate: nil,
+                                items: [line("Command Shuttle", nil, "48.99", "48.99"), line("Arcade Machine", nil, "31.99", "31.99"),
+                                        line("Wizard Pen Pal Box Set", nil, "23.99", "23.99"), line("Penguins", nil, nil, nil, free: true)],
+                                summary: OrderedStrings([("subtotal", "104.97"), ("total", "112.58")]), trackingNumbers: [], source: "")
+        let receipt = LegoEmail(orderNumber: "T100000082", kind: .confirmation, subject: "LEGO Shop Receipt 5550082", sentDate: day(2),
+                                orderDate: nil,
+                                items: [line("Command Shuttle", "75406", "69.99", "48.99"), line("Arcade Machine", "40805", "39.99", "31.99"),
+                                        line("Wizard Pen Pal B GLOBAL 1", "5008982", "29.99", "23.99")],
+                                summary: OrderedStrings([("subtotal", "104.97"), ("total", "112.58")]),
+                                trackingNumbers: [], source: "", receiptNumber: "5550082")
+        let order = buildOrders(from: [confirm, receipt], timeZone: TimeZone(identifier: "UTC")!)[0]
+        XCTAssertEqual(order.items.map(\.name), ["Command Shuttle", "Arcade Machine", "Wizard Pen Pal Box Set", "Penguins"])  // no duplicate
+        XCTAssertEqual(order.items.map(\.itemNumber), ["75406", "40805", "5008982", nil])
+        XCTAssertEqual(order.items.map(\.regularPrice), ["69.99", "39.99", "29.99", nil])
+        XCTAssertEqual(order.items.map(\.salePrice), ["48.99", "31.99", "23.99", nil])
+        XCTAssertEqual(order.items.map(\.isFreeGift), [false, false, false, true])
+    }
+
     func testLineAmounts() {
         func line(_ q: Int?, _ r: String?, _ s: String?) -> LegoOrderLine {
             LegoOrderLine(name: "Set", itemNumber: "1", customID: nil, quantity: q,
