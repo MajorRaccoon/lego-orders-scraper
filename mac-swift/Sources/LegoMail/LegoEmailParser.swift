@@ -115,7 +115,7 @@ public func parseLegoEmail(_ m: MailMessage, source: String = "", attachmentText
         subject: subject,
         sentDate: m.date,
         orderDate: findOrderDate(cleanLines(allText)) ?? dateInSubject(subject),
-        items: lineAmounts(best?.items ?? []),
+        items: lineAmounts(itemNumbersFromPictures(best?.items ?? [], html: m.htmlText)),
         summary: best?.summary ?? OrderedStrings(),
         trackingNumbers: findTrackingNumbers(cleanLines(allText)),
         source: source,
@@ -123,6 +123,44 @@ public func parseLegoEmail(_ m: MailMessage, source: String = "", attachmentText
             ?? labelColumnValues(cleanLines(allText))["invoice no"]
             ?? findReceiptNumber(subject: "", bodies: candidates)
     )
+}
+
+/// Current order confirmations show no item numbers, but each item's picture is named after its
+/// set number (".../75427_Prod.png") and comes just before the item's name in the HTML. Each
+/// picture gives its number to the first item name after it (and before the next picture).
+/// Items with no such picture (often gifts) keep no number.
+func itemNumbersFromPictures(_ items: [LegoOrderLine], html: String) -> [LegoOrderLine] {
+    guard !html.isEmpty, items.contains(where: { $0.itemNumber == nil }) else { return items }
+    let page = matchText(decodeHTMLEntities(html))
+    let ns = page as NSString
+    let pictures = MRx.compile("<img[^>]+src=\"[^\"]*/(\\d{4,7})(?:_[a-z0-9]+)?\\.(?:png|jpe?g|webp)")
+        .matches(in: page, range: NSRange(location: 0, length: ns.length))
+        .map { (position: $0.range.location, number: ns.substring(with: $0.range(at: 1))) }
+    guard !pictures.isEmpty else { return items }
+    var out = items
+    var numbered = Set<Int>()
+    for (k, picture) in pictures.enumerated() {
+        let end = k + 1 < pictures.count ? pictures[k + 1].position : ns.length
+        let window = NSRange(location: picture.position, length: end - picture.position)
+        var nearest: (index: Int, position: Int)?
+        for i in out.indices where out[i].itemNumber == nil && !numbered.contains(i) {
+            let key = String(matchText(out[i].name).prefix(12))
+            guard key.count >= 4 else { continue }
+            let found = ns.range(of: key, options: [], range: window)
+            if found.location != NSNotFound, nearest.map({ found.location < $0.position }) ?? true {
+                nearest = (i, found.location)
+            }
+        }
+        if let n = nearest { out[n.index].itemNumber = picture.number; numbered.insert(n.index) }
+    }
+    return out
+}
+
+/// Lowercase, no ™/®/©, straight apostrophes, single spaces: for finding an item's name in HTML.
+private func matchText(_ s: String) -> String {
+    let plain = s.lowercased().replacingOccurrences(of: "\u{2019}", with: "'")
+        .replacingOccurrences(of: "™", with: "").replacingOccurrences(of: "®", with: "").replacingOccurrences(of: "©", with: "")
+    return MRx.replace("\\s+", in: plain, with: " ")
 }
 
 /// The parsers find the price of one item. Orders store the price of the whole line

@@ -657,6 +657,30 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(order.items.map(\.isFreeGift), [false, false, false, true])
     }
 
+    func testItemNumbersFromPictureNames() {
+        func line(_ name: String) -> LegoOrderLine {
+            LegoOrderLine(name: name, itemNumber: nil, customID: nil, quantity: 1, prices: emptyPrices(),
+                          isFreeGift: false, isPiece: false, isGiftCard: false, status: nil, trackingNumber: nil)
+        }
+        // A preheader mentions the first item before any picture; the gifts have no set-number picture.
+        let html = """
+        <p>Thanks for ordering The Razor Crest!</p><img src="https://example.invalid/logo.png">
+        <table><tr><td><img src="https://example.invalid/img/75427_Prod.png" alt=""></td>
+        <td>The Razor Crest&trade;</td><td>$119.99</td></tr>
+        <tr><td><img src="https://example.invalid/img/75447_Prod.png"></td>
+        <td>SMART Play: Throne Room Duel &amp; A-Wing</td><td>$159.99</td></tr>
+        <tr><td><img src="https://example.invalid/img/gift.png"></td><td>Retro Jukebox</td><td>FREE</td></tr>
+        <tr><td>Winter Snow Globe</td><td>FREE</td></tr></table>
+        """
+        let items = [line("The Razor Crest"), line("SMART Play: Throne Room Duel & A-Wing"),
+                     line("Retro Jukebox"), line("Winter Snow Globe")]
+        XCTAssertEqual(itemNumbersFromPictures(items, html: html).map(\.itemNumber), ["75427", "75447", nil, nil])
+        // An item that already has a number keeps it; no pictures, no change.
+        var known = items; known[0].itemNumber = "11111"
+        XCTAssertEqual(itemNumbersFromPictures(known, html: html).map(\.itemNumber), ["11111", "75447", nil, nil])
+        XCTAssertEqual(itemNumbersFromPictures(items, html: "<p>The Razor Crest</p>").map(\.itemNumber), [nil, nil, nil, nil])
+    }
+
     func testLineAmounts() {
         func line(_ q: Int?, _ r: String?, _ s: String?) -> LegoOrderLine {
             LegoOrderLine(name: "Set", itemNumber: "1", customID: nil, quantity: q,
