@@ -29,7 +29,7 @@ order1 = LegoOrder.from_dict({
         {
             "name": 'Technic Hub <script>alert("x")</script> & Friends',
             "item_number": "42177", "custom_id": None, "quantity": 2,
-            "prices": {"product.regularPrice": "59.99", "product.salePrice": "49.99"},
+            "prices": {"product.regularPrice": "119.98", "product.salePrice": "99.98"},  # 2 of them: the whole line
             "is_free_gift": False, "is_piece": False, "is_gift_card": False,
             "status": "Shipped", "tracking_number": "1Z999AA10123456784",
         },
@@ -90,6 +90,18 @@ print("Item names with HTML special characters are escaped, not injected: OK")
 # --- Sale price shown as a strikethrough regular price + sale price -------
 assert "$59.99" in html_out and "$49.99" in html_out
 print("Regular vs. sale price both render when they differ: OK")
+
+# --- Price is for one item; Total is the whole line (quantity x price) -----
+assert "<th>Qty</th><th>Price</th><th>Total</th>" in html_out
+assert ('<td class="num">2</td><td class="num"><span class="strike">$59.99</span>$49.99</td>'
+        '<td class="num">$99.98</td>') in html_out
+assert '<td class="num">1</td><td class="num">$25.00</td><td class="num">$25.00</td>' in html_out
+assert '<td class="num">1</td><td class="num">—</td><td class="num">—</td>' in html_out  # free gift
+from lego_orders_scraper import _price_each
+assert _price_each("10.00", 3) == "3.33" and _price_each("2.50", 25) == "0.10"
+assert _price_each("9.99", 1) == "9.99" and _price_each("9.99", None) == "9.99" and _price_each("9.99", 0) == "9.99"
+assert _price_each(None, 2) is None and _price_each("1,234.50", 2) is None
+print("Price column is the price of one, Total the line amount: OK")
 
 # --- Flags render as tags -----------------------------------------------
 assert ">free gift<" in html_out

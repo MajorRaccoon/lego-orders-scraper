@@ -140,6 +140,14 @@ func renderSummaryTable(_ summary: OrderedStrings) -> String {
     return "<table class=\"summary-table\">\(rows.joined())</table>"
 }
 
+/// The price of one item from a line amount: the amount itself for a quantity of 1 (or none),
+/// else amount / quantity to the cent. nil if there's no amount or it isn't a number.
+func priceEach(_ lineAmount: String?, _ quantity: Int?) -> String? {
+    guard let lineAmount, !lineAmount.isEmpty else { return nil }
+    guard let q = quantity, q > 1 else { return lineAmount }
+    return pyFloat(lineAmount).map { pyFixed2($0 / Double(q)) }
+}
+
 func renderItemRow(_ item: LegoOrderLine) -> String {
     var tags: [String] = []
     if item.isPiece { tags.append("piece") }
@@ -152,19 +160,23 @@ func renderItemRow(_ item: LegoOrderLine) -> String {
     if let c = item.customID, !c.isEmpty { numberBits.append("ID: \(esc(c))") }
     let itemNumberHTML = numberBits.isEmpty ? "—" : numberBits.joined(separator: " &middot; ")
 
+    // Stored prices are for the whole line (quantity x price); show the price of one, then the line total.
     let regular = item.regularPrice, sale = item.salePrice
+    let regularEach = priceEach(regular, item.quantity), saleEach = priceEach(sale, item.quantity)
     let priceHTML: String
-    if let r = regular, let s = sale, r != s {
+    if let r = regularEach, let s = saleEach, r != s {
         priceHTML = "<span class=\"strike\">\(fmtMoney(r))</span>\(fmtMoney(s))"
     } else {
-        priceHTML = fmtMoney(sale ?? regular)
+        priceHTML = fmtMoney(saleEach ?? regularEach)
     }
+    let totalHTML = fmtMoney(sale ?? regular)
 
     return "<tr>"
         + "<td class=\"item-name\">\(esc(item.name))\(tagsHTML)</td>"
         + "<td class=\"item-number\">\(itemNumberHTML)</td>"
         + "<td class=\"num\">\(item.quantity.map(String.init) ?? "—")</td>"
         + "<td class=\"num\">\(priceHTML)</td>"
+        + "<td class=\"num\">\(totalHTML)</td>"
         + "<td>\(esc(item.status))</td>"
         + "<td>\(esc(item.trackingNumber))</td>"
         + "</tr>"
@@ -174,7 +186,7 @@ func renderOrderSection(_ order: LegoOrder, anchor: String) -> String {
     let itemsHTML: String
     if !order.items.isEmpty {
         itemsHTML = "<table class=\"items-table\"><thead><tr>"
-            + "<th>Item</th><th>Item #</th><th>Qty</th><th>Price</th>"
+            + "<th>Item</th><th>Item #</th><th>Qty</th><th>Price</th><th>Total</th>"
             + "<th>Status</th><th>Tracking #</th>"
             + "</tr></thead><tbody>"
             + order.items.map(renderItemRow).joined()

@@ -596,6 +596,18 @@ final class LegoEmailParserTests: XCTestCase {
         ], timeZone: TimeZone(identifier: "UTC")!)[0].items.count, 1)
     }
 
+    func testLineAmounts() {
+        func line(_ q: Int?, _ r: String?, _ s: String?) -> LegoOrderLine {
+            LegoOrderLine(name: "Set", itemNumber: "1", customID: nil, quantity: q,
+                          prices: OrderedStrings([("product.regularPrice", r), ("product.salePrice", s)]),
+                          isFreeGift: false, isPiece: false, isGiftCard: false, status: nil, trackingNumber: nil)
+        }
+        let out = lineAmounts([line(2, "59.99", "49.99"), line(1, "9.99", "9.99"), line(nil, "5.00", "5.00"),
+                               line(3, nil, nil), line(2, "1,234.50", "1,234.50")])
+        XCTAssertEqual(out.map(\.regularPrice), ["119.98", "9.99", "5.00", nil, "2469.00"])
+        XCTAssertEqual(out.map(\.salePrice), ["99.98", "9.99", "5.00", nil, "2469.00"])
+    }
+
     func testCancelledOrderTotalIsZero() {
         let day: (Int) -> Date = { Date(timeIntervalSince1970: 1_788_000_000 + Double($0) * 86_400) }
         let confirm = LegoEmail(orderNumber: "T100000078", kind: .confirmation, subject: "", sentDate: day(0), orderDate: nil,

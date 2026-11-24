@@ -151,7 +151,9 @@ final class MailRunTests: XCTestCase {
         XCTAssertEqual(t1.items.map(\.name), ["LEGO Icons Titanic", "LEGO Technic Hub", "Brick Calendar"])
         XCTAssertEqual(t1.items.map(\.status), ["Delivered", "Delivered", "Delivered"])
         XCTAssertEqual(t1.items.map(\.trackingNumber), ["1Z999AA10123456784", nil, nil])
-        XCTAssertEqual(t1.items[1].salePrice, "49.99")
+        // 2 at $49.99 (was $59.99): orders store the whole line, as LEGO.com does.
+        XCTAssertEqual(t1.items[1].salePrice, "99.98")
+        XCTAssertEqual(t1.items[1].regularPrice, "119.98")
         XCTAssertTrue(t1.items[2].isFreeGift)
 
         let t2 = orders[2]
@@ -174,7 +176,7 @@ final class MailRunTests: XCTestCase {
         XCTAssertEqual(t4.summary["delivery"], "0.00")
         XCTAssertEqual(t4.items.map(\.itemNumber), ["10281", "76914"])
         XCTAssertEqual(t4.items.map(\.quantity), [1, 2])
-        XCTAssertEqual(t4.items[1].regularPrice, "25.99")  // not the $51.98 line total
+        XCTAssertEqual(t4.items[1].regularPrice, "51.98")  // 2 x $25.99: the whole line, as LEGO.com stores it
         XCTAssertEqual(t4.url, orderDetailURL("T100000004"))
 
 

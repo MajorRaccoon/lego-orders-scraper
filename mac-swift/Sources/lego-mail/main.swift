@@ -54,7 +54,7 @@ func readOnePDF(_ file: URL) {
     print("Items (\(items.count)):")
     for it in items {
         let qty = it.quantity.map { String($0) } ?? "-"
-        print("  - \(it.name) | number \(it.itemNumber ?? "-") | qty \(qty) | regular \(it.regularPrice ?? "-") | sale \(it.salePrice ?? "-")")
+        print("  - \(it.name) | number \(it.itemNumber ?? "-") | qty \(qty) | each: regular \(it.regularPrice ?? "-"), sale \(it.salePrice ?? "-")")
     }
 }
 
