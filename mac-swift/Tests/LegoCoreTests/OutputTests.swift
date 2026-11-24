@@ -94,7 +94,7 @@ final class OutputTests: XCTestCase {
         {"order_number": "T900000001", "status": "Shipped", "order_date": "June 15, 2026", "total": "123.45",
          "url": "https://www.lego.com/x",
          "items": [{"name": "Technic Hub <script>alert(\\"x\\")</script> & Friends", "item_number": "42177", "quantity": 2,
-                    "prices": {"product.regularPrice": "59.99", "product.salePrice": "49.99"}, "is_free_gift": false,
+                    "prices": {"product.regularPrice": "119.98", "product.salePrice": "99.98"}, "is_free_gift": false,
                     "tracking_number": "1Z999AA10123456784"},
                    {"name": "Wrench", "item_number": "6335381", "custom_id": "abc123", "quantity": 1,
                     "prices": {"product.regularPrice": null, "product.salePrice": null}, "is_free_gift": true, "is_piece": true},
@@ -110,6 +110,13 @@ final class OutputTests: XCTestCase {
         XCTAssertFalse(html.contains("<script>alert"))
         XCTAssertTrue(html.contains("&lt;script&gt;") && html.contains("&amp; Friends"))
         XCTAssertTrue(html.contains("$59.99") && html.contains("$49.99"))
+        // Price is for one item; Total is the whole line (quantity x price).
+        XCTAssertTrue(html.contains("<th>Qty</th><th>Price</th><th>Total</th>"))
+        XCTAssertTrue(html.contains("<td class=\"num\">2</td><td class=\"num\"><span class=\"strike\">$59.99</span>$49.99</td>"
+                                    + "<td class=\"num\">$99.98</td>"))
+        XCTAssertEqual(priceEach("10.00", 3), "3.33"); XCTAssertEqual(priceEach("2.50", 25), "0.10")
+        XCTAssertEqual(priceEach("9.99", 1), "9.99"); XCTAssertEqual(priceEach("9.99", nil), "9.99")
+        XCTAssertNil(priceEach(nil, 2)); XCTAssertNil(priceEach("1,234.50", 2))
         XCTAssertTrue(html.contains(">free gift<") && html.contains(">piece<") && html.contains(">gift card<"))
         XCTAssertTrue(html.contains("-$20.00") && html.contains("LEGO Insiders discount"))
         XCTAssertTrue(html.contains("No item detail fetched for this order yet.") && html.contains("no detail"))

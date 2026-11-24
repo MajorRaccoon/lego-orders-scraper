@@ -103,7 +103,9 @@ Factory order); null for anything else.
 Each item's price is a "prices" object with two keys: "product.regularPrice"
 and "product.salePrice". If the item wasn't on sale, both keys hold the same
 value. If it was, "product.regularPrice" is the original price and
-"product.salePrice" is the discounted price actually paid. For a free gift
+"product.salePrice" is the discounted price actually paid. Both are for the
+whole line, as LEGO.com shows them: 2 of a $219.99 set is 439.98 (the HTML
+report shows the price of one and the line total). For a free gift
 item (no price shown on the page at all), both are null. The flat CSV
 mirrors this as two separate columns, "regular_price" and "sale_price".
 
@@ -153,7 +155,7 @@ from typing import Dict, List, Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
-__version__ = "48"  # bump by 1 with every change to this script
+__version__ = "49"  # bump by 1 with every change to this script
 
 # --since-date value used when the option isn't given on the command line
 # (MM/DD/YYYY). Pass --since-date all to turn the cutoff off entirely.
@@ -1946,6 +1948,20 @@ def _render_order_summary_table(summary):
     return f'<table class="summary-table">{"".join(rows)}</table>'
 
 
+def _price_each(line_amount, quantity):
+    """The price of one item from a line amount: the amount itself for a
+    quantity of 1 (or none given), else amount / quantity to the cent. None if
+    there's no amount, or it isn't a number."""
+    if line_amount is None or line_amount == "":
+        return None
+    if not quantity or quantity <= 1:
+        return line_amount
+    try:
+        return f"{float(line_amount) / quantity:.2f}"
+    except (TypeError, ValueError):
+        return None
+
+
 def _render_item_row(item):
     tags = []
     if item.is_piece:
@@ -1963,13 +1979,17 @@ def _render_item_row(item):
         number_bits.append(f"ID: {_esc(item.custom_id)}")
     item_number_html = " &middot; ".join(number_bits) if number_bits else "—"
 
+    # Stored prices are for the whole line (quantity x price); show the price of one,
+    # then the line total.
     prices = item.prices or {}
     regular = prices.get("product.regularPrice")
     sale = prices.get("product.salePrice")
-    if regular is not None and sale is not None and regular != sale:
-        price_html = f'<span class="strike">{_fmt_money(regular)}</span>{_fmt_money(sale)}'
+    regular_each, sale_each = _price_each(regular, item.quantity), _price_each(sale, item.quantity)
+    if regular_each is not None and sale_each is not None and regular_each != sale_each:
+        price_html = f'<span class="strike">{_fmt_money(regular_each)}</span>{_fmt_money(sale_each)}'
     else:
-        price_html = _fmt_money(sale if sale is not None else regular)
+        price_html = _fmt_money(sale_each if sale_each is not None else regular_each)
+    total_html = _fmt_money(sale if sale is not None else regular)
 
     return (
         "<tr>"
@@ -1977,6 +1997,7 @@ def _render_item_row(item):
         f'<td class="item-number">{item_number_html}</td>'
         f'<td class="num">{item.quantity if item.quantity is not None else "—"}</td>'
         f'<td class="num">{price_html}</td>'
+        f'<td class="num">{total_html}</td>'
         f"<td>{_esc(item.status)}</td>"
         f"<td>{_esc(item.tracking_number)}</td>"
         "</tr>"
@@ -1987,7 +2008,7 @@ def _render_order_section(order, anchor):
     if order.items:
         items_html = (
             '<table class="items-table"><thead><tr>'
-            "<th>Item</th><th>Item #</th><th>Qty</th><th>Price</th>"
+            "<th>Item</th><th>Item #</th><th>Qty</th><th>Price</th><th>Total</th>"
             "<th>Status</th><th>Tracking #</th>"
             "</tr></thead><tbody>"
             + "".join(_render_item_row(item) for item in order.items)

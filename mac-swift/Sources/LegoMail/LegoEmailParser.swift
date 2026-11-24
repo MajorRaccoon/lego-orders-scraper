@@ -115,7 +115,7 @@ public func parseLegoEmail(_ m: MailMessage, source: String = "", attachmentText
         subject: subject,
         sentDate: m.date,
         orderDate: findOrderDate(cleanLines(allText)) ?? dateInSubject(subject),
-        items: best?.items ?? [],
+        items: lineAmounts(best?.items ?? []),
         summary: best?.summary ?? OrderedStrings(),
         trackingNumbers: findTrackingNumbers(cleanLines(allText)),
         source: source,
@@ -123,6 +123,22 @@ public func parseLegoEmail(_ m: MailMessage, source: String = "", attachmentText
             ?? labelColumnValues(cleanLines(allText))["invoice no"]
             ?? findReceiptNumber(subject: "", bodies: candidates)
     )
+}
+
+/// The parsers find the price of one item. Orders store the price of the whole line
+/// (quantity x price), as LEGO.com shows it and the LEGO.com app saves it, so both apps'
+/// files mean the same thing. The HTML report shows the price of one and the line total.
+func lineAmounts(_ items: [LegoOrderLine]) -> [LegoOrderLine] {
+    items.map { item in
+        guard let q = item.quantity, q > 1 else { return item }
+        var line = item
+        for key in item.prices.keys {
+            if let v = item.prices[key], let each = amountValue(v) {
+                line.prices[key] = String(format: "%.2f", each * Double(q))
+            }
+        }
+        return line
+    }
 }
 
 /// LEGO order numbers look like "T514535382" (US store: T + 9 digits). Looks in the subject
