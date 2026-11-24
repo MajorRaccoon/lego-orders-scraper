@@ -376,6 +376,12 @@ final class LegoEmailParserTests: XCTestCase {
         XCTAssertEqual(sale.first?.quantity, 2)
         // Summary lines aren't taken for items.
         XCTAssertTrue(parsePriceQuantityColumns(["SUB TOTAL:", "$36.98", "TAX:", "$2.68", "ORDER TOTAL:", "$39.66"]).isEmpty)
+        // Headings run together between the name and its price, and the same values repeated
+        // after the status (a second, mobile copy of the table): one item, with its real name.
+        let joined = parsePriceQuantityColumns(["Village - Collectors' Edition", "PriceQTD.TOTAL", "$399.99", "1", "$399.99",
+                                                "Status:", "In Process", "$399.99", "1", "$399.99"])
+        XCTAssertEqual(joined.map(\.name), ["Village - Collectors' Edition"])
+        XCTAssertEqual(joined.first?.salePrice, "399.99")
     }
 
     /// A real receipt PDF where PDFKit split the one item row and ran it into the column
@@ -679,6 +685,25 @@ final class LegoEmailParserTests: XCTestCase {
         var known = items; known[0].itemNumber = "11111"
         XCTAssertEqual(itemNumbersFromPictures(known, html: html).map(\.itemNumber), ["11111", "75447", nil, nil])
         XCTAssertEqual(itemNumbersFromPictures(items, html: "<p>The Razor Crest</p>").map(\.itemNumber), [nil, nil, nil, nil])
+    }
+
+    func testSameNamedItemsGetDifferentNumbers() {
+        func line(_ number: String?, _ price: String) -> LegoOrderLine {
+            LegoOrderLine(name: "Advent Calendar 2026", itemNumber: number, customID: nil, quantity: 1,
+                          prices: OrderedStrings([("product.regularPrice", price), ("product.salePrice", price)]),
+                          isFreeGift: false, isPiece: false, isGiftCard: false, status: nil, trackingNumber: nil)
+        }
+        let day: (Int) -> Date = { Date(timeIntervalSince1970: 1_788_000_000 + Double($0) * 86_400) }
+        let confirm = LegoEmail(orderNumber: "T100000083", kind: .confirmation, subject: "Your order", sentDate: day(0), orderDate: nil,
+                                items: [line(nil, "34.99"), line(nil, "44.99"), line(nil, "34.99"), line(nil, "44.99")],
+                                summary: OrderedStrings([("subtotal", "159.96")]), trackingNumbers: [], source: "")
+        let receipt = LegoEmail(orderNumber: "T100000083", kind: .confirmation, subject: "LEGO Shop Receipt 5550083", sentDate: day(3),
+                                orderDate: nil,
+                                items: [line("60510", "34.99"), line("75456", "44.99"), line("42698", "34.99"), line("76340", "44.99")],
+                                summary: OrderedStrings([("subtotal", "159.96")]), trackingNumbers: [], source: "", receiptNumber: "5550083")
+        // The same receipt read twice (from Mail and from the receipts folder) changes nothing.
+        let order = buildOrders(from: [confirm, receipt, receipt], timeZone: TimeZone(identifier: "UTC")!)[0]
+        XCTAssertEqual(order.items.map(\.itemNumber), ["60510", "75456", "42698", "76340"])
     }
 
     func testLineAmounts() {

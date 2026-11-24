@@ -306,7 +306,16 @@ private func canBeName(_ line: String) -> Bool {
     if MRx.search("^(order\\s*(number|no\\.?|#|date)|tracking|shipping|delivery|tax|discount|sold by|ship to|"
                   + "billing|payment|estimated|carrier|delivered|shipped)\\b", line) != nil { return false }
     if statusWords.contains(line) { return false }
+    // Order confirmations' item status ("Status: In Process") and column headings, even when
+    // they come through run together ("PriceQTD.TOTAL").
+    if MRx.search("^(status\\b.*|in process|in progress|on (its|the) way|out for delivery)$", line) != nil { return false }
+    if isColumnHeading(line) { return false }
     return MRx.search("[A-Za-z]", line) != nil
+}
+
+/// "Price QTD. TOTAL", "PriceQTD.TOTAL", "Qty / Total": the headings over an item table.
+private func isColumnHeading(_ line: String) -> Bool {
+    MRx.search("^(?:(?:price|qtd|qty|quantity|total|each|unit|item)[\\s.:/|]*){2,}$", line) != nil
 }
 
 /// Lines that end an item's block: the order summary has started.
@@ -421,14 +430,19 @@ public func parsePriceQuantityColumns(_ lines: [String]) -> [LegoOrderLine] {
     let money = "^-?\\$\\d[\\d,]*\\.\\d{2}$"
     var items: [LegoOrderLine] = []
     var i = 0
+    var lastName = -1  // a name line is used for one item only
     while i < lines.count {
         var j = i + 1
         var prices: [String] = []
         while j < lines.count, prices.count < 2, MRx.search(money, lines[j]) != nil {
             prices += amounts(in: lines[j]); j += 1
         }
+        // The name is the line above the price, or above the column headings when they sit
+        // between the name and its price ("Hogsmeade Village" / "PriceQTD.TOTAL" / "$399.99").
+        let nameIndex = isColumnHeading(lines[i]) && i > lastName + 1 ? i - 1 : i
         guard !prices.isEmpty, j < lines.count, let q = Int(lines[j]), MRx.search("^\\d{1,3}$", lines[j]) != nil,
-              canBeName(lines[i]) else { i += 1; continue }
+              nameIndex > lastName, canBeName(lines[nameIndex]) else { i += 1; continue }
+        lastName = nameIndex
         var next = j + 1
         if let total = lines[safe: next], MRx.search(money, total) != nil {
             // The line total, when the shown price isn't the price paid each.
@@ -438,7 +452,7 @@ public func parsePriceQuantityColumns(_ lines: [String]) -> [LegoOrderLine] {
             }
             next += 1
         }
-        let name = cleanProductName(lines[i])
+        let name = cleanProductName(lines[nameIndex])
         let free = prices.allSatisfy { amountValue($0) == 0 }
         items.append(LegoOrderLine(
             name: name, itemNumber: nil, customID: nil, quantity: q,
