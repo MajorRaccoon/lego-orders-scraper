@@ -596,6 +596,39 @@ final class LegoEmailParserTests: XCTestCase {
         ], timeZone: TimeZone(identifier: "UTC")!)[0].items.count, 1)
     }
 
+    func testPricesComeFromAnotherEmailWhenTheItemListHasNone() {
+        func line(_ name: String, _ number: String, _ q: Int?, _ price: String?) -> LegoOrderLine {
+            LegoOrderLine(name: name, itemNumber: number, customID: nil, quantity: q,
+                          prices: price.map { OrderedStrings([("product.regularPrice", $0), ("product.salePrice", $0)]) } ?? emptyPrices(),
+                          isFreeGift: false, isPiece: false, isGiftCard: false, status: nil, trackingNumber: nil)
+        }
+        let day: (Int) -> Date = { Date(timeIntervalSince1970: 1_788_000_000 + Double($0) * 86_400) }
+        // The shipping notice lists the set and two gifts with no prices; the receipt only the set.
+        let shipped = LegoEmail(orderNumber: "T100000080", kind: .shipped, subject: "", sentDate: day(4), orderDate: nil,
+                                items: [line("Big Set", "75457", nil, nil), line("Gift A", "40899", nil, nil), line("Gift B", "40897", nil, nil)],
+                                summary: OrderedStrings(), trackingNumbers: [], source: "")
+        let receipt = LegoEmail(orderNumber: "T100000080", kind: .confirmation, subject: "LEGO Shop Receipt 5550080", sentDate: day(6),
+                                orderDate: "October 1, 2026", items: [line("Big Set", "75457", 1, "799.99")],
+                                summary: OrderedStrings([("subtotal", "799.99"), ("tax", "58.00"), ("total", "857.99")]),
+                                trackingNumbers: [], source: "", receiptNumber: "5550080")
+        let order = buildOrders(from: [shipped, receipt, receipt], timeZone: TimeZone(identifier: "UTC")!)[0]
+        XCTAssertEqual(order.items.map(\.itemNumber), ["75457", "40899", "40897"])
+        XCTAssertEqual(order.items.map(\.salePrice), ["799.99", nil, nil])
+        XCTAssertEqual(order.items.map(\.quantity), [1, nil, nil])
+        XCTAssertEqual(order.items.map(\.isFreeGift), [false, true, true])  // the set alone makes the subtotal
+        XCTAssertEqual(order.total, "857.99")
+
+        // If the priced items don't make the subtotal, an unpriced item isn't called a gift.
+        let short = LegoEmail(orderNumber: "T100000081", kind: .confirmation, subject: "LEGO Shop Receipt 5550081", sentDate: day(6),
+                              orderDate: nil, items: [line("Big Set", "75457", 1, "799.99")],
+                              summary: OrderedStrings([("subtotal", "849.98"), ("total", "900.00")]),
+                              trackingNumbers: [], source: "", receiptNumber: "5550081")
+        var ship2 = shipped; ship2.orderNumber = "T100000081"
+        let other = buildOrders(from: [ship2, short], timeZone: TimeZone(identifier: "UTC")!)[0]
+        XCTAssertEqual(other.items.map(\.isFreeGift), [false, false, false])
+        XCTAssertEqual(other.items[0].salePrice, "799.99")
+    }
+
     func testLineAmounts() {
         func line(_ q: Int?, _ r: String?, _ s: String?) -> LegoOrderLine {
             LegoOrderLine(name: "Set", itemNumber: "1", customID: nil, quantity: q,
