@@ -1,0 +1,129 @@
+# Builds the iPhone/iPad app ("LEGO Orders", ios/) on a Mac, and can upload it to TestFlight.
+#
+# Every run builds the app for the iOS Simulator (no signing needed), which checks that the app
+# and the shared Swift package (mac-swift: LegoCore + LegoWebKit) compile for iOS.
+#
+# Upload to TestFlight: run it with "Upload to TestFlight" ticked (Actions tab -> "iOS app" ->
+# "Run workflow"); the Release workflow does it too. It needs these repository secrets, from a
+# paid Apple Developer Program account (see ios/README.md for how to get them):
+#   APP_STORE_CONNECT_KEY_ID      the API key's Key ID
+#   APP_STORE_CONNECT_ISSUER_ID   the Issuer ID shown above the keys list
+#   APP_STORE_CONNECT_KEY_P8      the whole text of the downloaded AuthKey_XXXX.p8 file
+#   APPLE_TEAM_ID                 your 10-character Team ID
+# and optionally the repository variable IOS_BUNDLE_ID (default io.github.majorraccoon.legoorders),
+# which must match the app created in App Store Connect. Xcode creates and manages the
+# distribution certificate and profile itself through the API key ("cloud signing").
+name: iOS app
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload to TestFlight"
+        type: boolean
+        default: false
+      version:
+        description: "Version shown in TestFlight, e.g. 1.3.13 (blank = 1.0)"
+        required: false
+        default: ""
+  workflow_call:  # run by the Release workflow (release.yml)
+    inputs:
+      upload:
+        type: boolean
+        default: false
+      version:
+        type: string
+        default: ""
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - "mac-swift/Package.swift"
+      - "mac-swift/Sources/LegoCore/**"
+      - "mac-swift/Sources/LegoWebKit/**"
+      - ".github/workflows/ios-app.yml"
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      HAS_ASC_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_P8 != '' && secrets.APP_STORE_CONNECT_KEY_ID != '' && secrets.APP_STORE_CONNECT_ISSUER_ID != '' && secrets.APPLE_TEAM_ID != '' }}
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'io.github.majorraccoon.legoorders' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the machine and Xcode
+        run: |
+          sw_vers
+          xcodebuild -version
+
+      - name: Make the Xcode project (XcodeGen)
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Build for the iOS Simulator (checks it compiles; no signing)
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/LegoOrders.xcodeproj -scheme LegoOrders \
+            -destination 'generic/platform=iOS Simulator' -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/sim-build.log" | grep -E "error:|warning: .*LegoOrders|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/sim-build.log"
+
+      - name: Upload to TestFlight - skipped (secrets not set)
+        if: inputs.upload && env.HAS_ASC_KEY != 'true'
+        run: |
+          echo "::notice::Not uploaded to TestFlight: set APP_STORE_CONNECT_KEY_ID, APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_KEY_P8 and APPLE_TEAM_ID (see ios/README.md)."
+
+      - name: Archive, sign and upload to TestFlight
+        if: inputs.upload && env.HAS_ASC_KEY == 'true'
+        env:
+          KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -eo pipefail
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s\n' "$KEY_P8" > "$KEY"
+          grep -q "BEGIN PRIVATE KEY" "$KEY" || { echo "::error::APP_STORE_CONNECT_KEY_P8 doesn't look like the text of a .p8 key file (it should start with -----BEGIN PRIVATE KEY-----)."; exit 1; }
+          VERSION="${VERSION_INPUT:-1.0}"
+          VERSION="${VERSION#v}"
+          BUILD=$(date -u +%Y%m%d.%H%M)   # always higher than the last upload
+          echo "Version $VERSION, build $BUILD, bundle ID $BUNDLE_ID"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
+
+          xcodebuild -project ios/LegoOrders.xcodeproj -scheme LegoOrders -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/LegoOrders.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+            "${AUTH[@]}" archive 2>&1 | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" || true
+          grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log" || {
+            echo "::error::Archiving (signing) failed. Common causes: the API key's role isn't Admin (needed to create the distribution certificate), the Team ID is wrong, or the bundle ID $BUNDLE_ID belongs to another team. See the errors above."
+            exit 1; }
+
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          PLIST
+
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/LegoOrders.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            "${AUTH[@]}" 2>&1 | tee "$RUNNER_TEMP/export.log" | grep -E "error:|EXPORT (SUCCEEDED|FAILED)|Upload" || true
+          grep -q "EXPORT SUCCEEDED" "$RUNNER_TEMP/export.log" || {
+            echo "::error::Uploading to App Store Connect failed. Most often the app doesn't exist yet in App Store Connect with bundle ID $BUNDLE_ID (My Apps -> + -> New App). See the errors above."
+            exit 1; }
+          echo "::notice::Uploaded LEGO Orders $VERSION ($BUILD) to TestFlight. It appears in the TestFlight app after Apple finishes processing (usually 5-30 minutes)."
+
+      - name: Remove the API key file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"

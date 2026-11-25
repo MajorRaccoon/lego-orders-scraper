@@ -3,6 +3,7 @@
 #   LEGO-Mail-Orders-macOS.zip            the Apple Mail Mac app (mac-swift/)
 #   LEGO-Order-Scraper-Windows-x64.zip    the Windows app for most PCs (windows-app/)
 #   LEGO-Order-Scraper-Windows-arm64.zip  the Windows app for ARM PCs
+# and uploads the iPhone/iPad app (ios/) to TestFlight when its secrets are set (ios-app.yml).
 # The builds are the "macOS app" and "Windows app" workflows, run as they are (all their
 # tests and checks must pass), so a release never has an untested file.
 #
@@ -35,6 +36,15 @@ jobs:
 
   windows:
     uses: ./.github/workflows/windows-app.yml
+
+  # The iPhone/iPad app goes to TestFlight (not a release file). Skipped with a notice when the
+  # App Store Connect secrets aren't set; the release doesn't wait for it.
+  ios:
+    uses: ./.github/workflows/ios-app.yml
+    with:
+      upload: true
+      version: ${{ inputs.tag }}
+    secrets: inherit
 
   publish:
     needs: [mac, windows]

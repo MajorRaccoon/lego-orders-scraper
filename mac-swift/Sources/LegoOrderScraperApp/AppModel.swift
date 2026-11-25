@@ -1,5 +1,6 @@
 import AppKit
 import LegoCore
+import LegoWebKit
 import SwiftUI
 
 /// App state: options, the running scrape, the log, and the result files.

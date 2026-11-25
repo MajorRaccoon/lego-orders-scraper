@@ -1,4 +1,5 @@
 import LegoCore
+import LegoWebKit
 import SwiftUI
 import WebKit
 

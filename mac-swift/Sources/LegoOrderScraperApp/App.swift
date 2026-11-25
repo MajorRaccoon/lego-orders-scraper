@@ -1,5 +1,6 @@
 import AppKit
 import LegoCore
+import LegoWebKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {

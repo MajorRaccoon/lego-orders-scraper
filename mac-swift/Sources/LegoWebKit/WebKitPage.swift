@@ -1,14 +1,20 @@
-import AppKit
+import Foundation
 import LegoCore
 import WebKit
+#if canImport(AppKit)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
-/// The app's built-in browser (WebKit, the engine Safari uses), driven for the scraper.
+/// The apps' built-in browser (WebKit, the engine Safari uses), driven for the scraper.
 /// Logins are kept in WebKit's normal website-data store, so you stay signed in between runs.
+/// Shared by the Mac app and the iPhone/iPad app.
 @MainActor
-final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegate {
-    let webView: WKWebView
+public final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegate {
+    public let webView: WKWebView
     /// When set, every page text the scraper reads is also saved here (troubleshooting).
-    var debugDir: URL?
+    public var debugDir: URL?
     private var debugCount = 0
 
     private var currentNav: WKNavigation?
@@ -16,13 +22,13 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
     private var navFinished = false
     private var navError: Error?
 
-    override init() {
+    public override init() {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         // Present as Safari, so sign-in pages don't treat the app as an unsupported "embedded" browser.
         let os = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
         config.applicationNameForUserAgent = "Version/\(os >= 26 ? os : os + 3).0 Safari/605.1.15"
-        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1000, height: 800), configuration: config)
+        webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800), configuration: config)
         super.init()
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -48,7 +54,7 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
     """
 
     /// Run JavaScript and return its result. Scripts must always return a value (not undefined).
-    func js(_ script: String) async throws -> Any? {
+    public func js(_ script: String) async throws -> Any? {
         try await withCheckedThrowingContinuation { cont in
             webView.evaluateJavaScript("(function(){\n" + Self.prelude + script + "\n})()") { result, error in
                 if let error { cont.resume(throwing: error) } else { cont.resume(returning: result) }
@@ -60,7 +66,7 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
 
     // MARK: BrowserPage
 
-    func goto(_ url: String, timeout: Double) async throws {
+    public func goto(_ url: String, timeout: Double) async throws {
         guard let u = URL(string: url) else { throw ScraperError("bad URL: \(url)") }
         navCommitted = false; navFinished = false; navError = nil
         currentNav = webView.load(URLRequest(url: u))
@@ -76,7 +82,7 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
         }
     }
 
-    func dismissInterstitials() async {
+    public func dismissInterstitials() async {
         for label in ["continue", "reject all"] {
             let clicked = await jsBool("""
             var b = __buttons();
@@ -89,14 +95,14 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
         }
     }
 
-    func isSignedOut() async -> Bool {
+    public func isSignedOut() async -> Bool {
         await jsBool("""
         if ((document.title || '').trim() === 'Sign In') return true;
         return __links().some(function(el){ return __name(el).toLowerCase().indexOf('sign in') >= 0; });
         """)
     }
 
-    func mainText() async throws -> String {
+    public func mainText() async throws -> String {
         let text = (try await js("var m = document.querySelector('main') || document.body; return m ? m.innerText : '';") as? String) ?? ""
         if let dir = debugDir {
             debugCount += 1
@@ -107,16 +113,16 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
         return text
     }
 
-    func orderLinkCount() async -> Int {
+    public func orderLinkCount() async -> Int {
         let n = try? await js("return __links().filter(function(el){ return /^Order Number: T\\d+$/.test(__name(el)); }).length;")
         return (n as? Int) ?? (n as? NSNumber)?.intValue ?? 0
     }
 
-    func isLoadMoreVisible() async -> Bool {
+    public func isLoadMoreVisible() async -> Bool {
         await jsBool("return __buttons().some(function(el){ return __name(el).toLowerCase().indexOf('load more') >= 0; });")
     }
 
-    func clickLoadMore() async throws {
+    public func clickLoadMore() async throws {
         let ok = try await js("""
         var b = __buttons().find(function(el){ return __name(el).toLowerCase().indexOf('load more') >= 0; });
         if (!b) return false;
@@ -127,7 +133,7 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
         if ok != true { throw ScraperError("Load More button disappeared") }
     }
 
-    func waitForText(_ pattern: String, timeout: Double) async throws -> Bool {
+    public func waitForText(_ pattern: String, timeout: Double) async throws -> Bool {
         let re = try NSRegularExpression(pattern: pattern)
         let deadline = Date().addingTimeInterval(timeout)
         while true {
@@ -142,7 +148,7 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
         }
     }
 
-    func waitForLoadMore(timeout: Double) async throws -> Bool {
+    public func waitForLoadMore(timeout: Double) async throws -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
             try Task.checkCancellation()
@@ -152,14 +158,14 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
         }
     }
 
-    func sleep(_ seconds: Double) async throws {
+    public func sleep(_ seconds: Double) async throws {
         try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
     }
 
-    var currentURL: String { webView.url?.absoluteString ?? "" }
+    public var currentURL: String { webView.url?.absoluteString ?? "" }
 
     /// Sign out of LEGO.com in the built-in browser by deleting all saved website data.
-    func forgetLogin() async {
+    public func forgetLogin() async {
         let store = WKWebsiteDataStore.default()
         await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
     }
@@ -168,20 +174,20 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
 
     private func isCurrent(_ nav: WKNavigation?) -> Bool { currentNav == nil || nav === currentNav }
 
-    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         if isCurrent(navigation) { navCommitted = true }
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if isCurrent(navigation) { navFinished = true }
     }
 
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         guard isCurrent(navigation) else { return }
         handle(error)
     }
 
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+    public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         guard isCurrent(navigation) else { return }
         handle(error)
     }
@@ -197,26 +203,52 @@ final class WebKitPage: NSObject, BrowserPage, WKNavigationDelegate, WKUIDelegat
     // MARK: WKUIDelegate
 
     /// Links that would open a new window (target=_blank) open in the same view instead.
-    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+    public func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if navigationAction.targetFrame == nil { webView.load(navigationAction.request) }
         return nil
     }
 
-    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
-                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+    #if canImport(AppKit)
+    public func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
         let alert = NSAlert()
         alert.messageText = message
         alert.runModal()
         completionHandler()
     }
 
-    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
-                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+    public func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
         let alert = NSAlert()
         alert.messageText = message
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Cancel")
         completionHandler(alert.runModal() == .alertFirstButtonReturn)
     }
+    #elseif canImport(UIKit)
+    public func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+        guard present(alert) else { completionHandler(); return }
+    }
+
+    public func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+        guard present(alert) else { completionHandler(false); return }
+    }
+
+    /// Shows an alert over whatever is on screen. false if there's nothing to show it on.
+    private func present(_ alert: UIAlertController) -> Bool {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard var top = scenes.flatMap(\.windows).first(where: \.isKeyWindow)?.rootViewController else { return false }
+        while let next = top.presentedViewController { top = next }
+        top.present(alert, animated: true)
+        return true
+    }
+    #endif
 }

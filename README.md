@@ -231,6 +231,10 @@ cd mac-swift
 
 Or download **LEGO-Mail-Orders-macOS.zip** from the repo's **Releases** page. Full details: [`mac-swift/README-mail.md`](mac-swift/README-mail.md).
 
+### iPhone and iPad
+
+**LEGO Orders** is the LEGO.com scraper as an iPhone/iPad app, with a Scrape tab and a Report tab, using the same code as the Mac app. It's installed through TestFlight. Setup and details: [`ios/README.md`](ios/README.md).
+
 ---
 
 ## 5. Windows app
