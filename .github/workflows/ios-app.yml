@@ -35,7 +35,7 @@ on:
         type: string
         default: ""
   push:
-    branches: [main]
+    branches: [main, "claude/**"]  # also on working branches, so changes are checked before merging
     paths:
       - "ios/**"
       - "mac-swift/Package.swift"
