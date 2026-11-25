@@ -2,3 +2,6 @@
 LegoOrders.xcodeproj/
 Info.plist
 build/
+# The asset catalog needs these (the top-level .gitignore skips *.json to keep order data out)
+!Assets.xcassets/**/Contents.json
+!Assets.xcassets/Contents.json
